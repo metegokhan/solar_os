@@ -555,12 +555,31 @@ static void python_dict_store_uint(mp_obj_t dict, const char *key, mp_uint_t val
     mp_obj_dict_store(dict, python_key(key), mp_obj_new_int_from_uint(value));
 }
 
+static mp_obj_t python_i64_to_obj(int64_t value)
+{
+    if (value >= (int64_t)MP_SMALL_INT_MIN &&
+        value <= (int64_t)MP_SMALL_INT_MAX) {
+        return MP_OBJ_NEW_SMALL_INT((mp_int_t)value);
+    }
+    return mp_obj_new_int_from_ll(value);
+}
+
+static mp_obj_t python_u64_to_obj(uint64_t value)
+{
+    if (value <= (uint64_t)MP_SMALL_INT_MAX) {
+        return MP_OBJ_NEW_SMALL_INT((mp_int_t)value);
+    }
+    return mp_obj_new_int_from_ull(value);
+}
+
+static void python_dict_store_i64(mp_obj_t dict, const char *key, int64_t value)
+{
+    mp_obj_dict_store(dict, python_key(key), python_i64_to_obj(value));
+}
+
 static void python_dict_store_u64(mp_obj_t dict, const char *key, uint64_t value)
 {
-    mp_obj_t object = value <= (uint64_t)MP_SMALL_INT_MAX
-        ? mp_obj_new_int_from_uint((mp_uint_t)value)
-        : mp_obj_new_int_from_ull(value);
-    mp_obj_dict_store(dict, python_key(key), object);
+    mp_obj_dict_store(dict, python_key(key), python_u64_to_obj(value));
 }
 
 static void python_dict_store_float(mp_obj_t dict, const char *key, float value)
@@ -1341,7 +1360,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(solaros_storage_unmount_volume_obj, solaros_storage_un
 
 static mp_obj_t solaros_time_uptime_ms(void)
 {
-    return mp_obj_new_int_from_ull(solar_os_time_uptime_ms());
+    return python_u64_to_obj(solar_os_time_uptime_ms());
 }
 MP_DEFINE_CONST_FUN_OBJ_0(solaros_time_uptime_ms_obj, solaros_time_uptime_ms);
 
@@ -1791,9 +1810,9 @@ static mp_obj_t python_http_response_to_dict(
 
     mp_obj_t result = mp_obj_new_dict(8);
     python_dict_store_int(result, "status_code", response->response.status_code);
-    mp_obj_dict_store(result,
-                      python_key("content_length"),
-                      mp_obj_new_int_from_ll(response->response.content_length));
+    python_dict_store_i64(result,
+                          "content_length",
+                          response->response.content_length);
     python_dict_store_u64(result, "bytes_received", response->response.bytes_received);
     python_dict_store_uint(result, "duration_ms", response->response.duration_ms);
     python_dict_store_bool(result, "truncated", response->body_truncated);

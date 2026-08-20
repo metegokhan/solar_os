@@ -43,6 +43,20 @@ class ScriptHttpBindingsTest(unittest.TestCase):
             self.assertIn(f'"{field}"', PYTHON_SOURCE)
             self.assertIn(f'"{field}"', LUA_SOURCE)
 
+    def test_python_content_length_uses_small_int_aware_conversion(self):
+        self.assertIn(
+            'python_dict_store_i64(result,\n'
+            '                          "content_length",\n'
+            '                          response->response.content_length);',
+            PYTHON_SOURCE,
+        )
+        self.assertNotIn(
+            "mp_obj_new_int_from_ll(response->response.content_length)",
+            PYTHON_SOURCE,
+        )
+        self.assertIn("value >= (int64_t)MP_SMALL_INT_MIN", PYTHON_SOURCE)
+        self.assertIn("value <= (int64_t)MP_SMALL_INT_MAX", PYTHON_SOURCE)
+
     def test_buffered_client_is_bounded_and_cancellation_aware(self):
         self.assertIn("SOLAR_OS_HTTP_BUFFERED_DEFAULT_MAX_BODY", HTTP_HEADER)
         self.assertIn("SOLAR_OS_HTTP_BUFFERED_MAX_BODY", HTTP_HEADER)

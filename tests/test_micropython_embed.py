@@ -113,6 +113,25 @@ class MicroPythonEmbedTest(unittest.TestCase):
             source,
         )
 
+    def test_native_i64_values_use_small_int_aware_conversion(self):
+        source_paths = [REPOSITORY / "src/apps/solar_os_python.c"]
+        source_paths.extend(
+            sorted((REPOSITORY / "src/apps").glob("solar_os_python_*.inc"))
+        )
+        source = "\n".join(
+            path.read_text(encoding="utf-8") for path in source_paths
+        )
+        self.assertIn(
+            "return python_u64_to_obj(solar_os_time_uptime_ms());",
+            source,
+        )
+        self.assertIn(
+            "return python_i64_to_obj(value);",
+            source,
+        )
+        self.assertEqual(source.count("mp_obj_new_int_from_ll("), 1)
+        self.assertEqual(source.count("mp_obj_new_int_from_ull("), 1)
+
     def test_import_reader_uses_solaros_path_resolution(self):
         source = (
             generate_micropython_embed.PACKAGE / "py" / "reader.c"

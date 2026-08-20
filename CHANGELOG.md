@@ -24,7 +24,10 @@
   manuals, with generated zero-copy indexes and retrieval coverage for every
   shared service. MicroPython now initializes the `EXTRA` profile's C-stack
   limit from the current FreeRTOS task, restoring REPL and Agent script
-  execution while preserving recursion-depth protection.
+  execution while preserving recursion-depth protection. Native signed and
+  unsigned 64-bit values that fit MicroPython's immediate integer range now
+  convert without requiring long-integer support, restoring `solaros.http`
+  response dictionaries, `solaros.uptime_ms()`, and small DSP dot products.
 - **4.8.3** — 2026-08-12 — Gateway Chat now uses the global SolarOS user and
   hostname identity instead of a separate saved username. Added CRC-verified
   NVS backup and restore to disk with `/.solar/nvs.bin` as the default file.
