@@ -1,6 +1,7 @@
 /* SolarOS MicroPython embed configuration. */
 
 #include <stdint.h>
+#include <stddef.h>
 
 #include <port/mpconfigport_common.h>
 
@@ -14,11 +15,11 @@
 #define MICROPY_FLOAT_IMPL                      (MICROPY_FLOAT_IMPL_FLOAT)
 #define MICROPY_GCREGS_SETJMP                  (1)
 
-/* The embed port does not yet provide SolarOS filesystem import/open hooks. */
-#define MICROPY_ENABLE_EXTERNAL_IMPORT          (0)
+/* SolarOS-backed files and source/bytecode imports. */
+#define MICROPY_ENABLE_EXTERNAL_IMPORT          (1)
 #define MICROPY_PY_BUILTINS_EXECFILE            (0)
 #define MICROPY_PY_BUILTINS_INPUT               (0)
-#define MICROPY_PY_IO                           (0)
+#define MICROPY_PY_IO                           (1)
 #define MICROPY_PY_SYS_STDFILES                 (0)
 
 /* Selected standard modules supported by the SolarOS embed port. */
@@ -67,7 +68,13 @@ uint32_t solar_os_micropython_random_seed(void);
 
 #define MICROPY_ERROR_REPORTING                 (MICROPY_ERROR_REPORTING_TERSE)
 #define MICROPY_WARNINGS                        (0)
-#define MICROPY_READER_POSIX                    (0)
+#define MICROPY_READER_POSIX                    (1)
+
+#define SOLAR_OS_MICROPYTHON_PATH_MAX           (160)
+
+int solar_os_micropython_resolve_path(const char *input,
+                                      char *output,
+                                      size_t output_len);
 
 void solar_os_micropython_vm_hook(void);
 

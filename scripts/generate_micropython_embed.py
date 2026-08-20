@@ -17,6 +17,7 @@ COMPONENT = REPOSITORY / "components" / "micropython_embed"
 PACKAGE = COMPONENT / "micropython_embed"
 QSTR_DEFS = COMPONENT / "qstrdefs.h"
 PORT_OVERRIDES = COMPONENT / "overrides" / "port"
+PORT_QSTR_SOURCES = (Path("solaros_file.c"),)
 
 SELECTED_EXTMOD_SOURCES = (
     Path("extmod/modbinascii.c"),
@@ -29,10 +30,13 @@ SELECTED_EXTMOD_SUPPORT = (
     Path("lib/crypto-algorithms/sha256.h"),
 )
 SOURCE_REPLACEMENTS = {
-    Path("py/objstringio.c"): (
-        "#if MICROPY_PY_IO\n",
-        "/* SolarOS: json.loads uses StringIO while the public io module is disabled. */\n"
-        "#if MICROPY_PY_IO || MICROPY_PY_JSON\n",
+    Path("py/reader.c"): (
+        "int fd = open(qstr_str(filename), O_RDONLY, 0644);\n",
+        "char resolved[SOLAR_OS_MICROPYTHON_PATH_MAX];\n"
+        "    if (solar_os_micropython_resolve_path(qstr_str(filename), resolved, sizeof(resolved)) != 0) {\n"
+        "        mp_raise_OSError_with_filename(errno, qstr_str(filename));\n"
+        "    }\n"
+        "    int fd = open(resolved, O_RDONLY, 0644);\n",
     ),
 }
 
@@ -48,6 +52,7 @@ REQUIRED_OUTPUT = {
         "MODULE_DEF_BINASCII",
         "MODULE_DEF_COLLECTIONS",
         "MODULE_DEF_HASHLIB",
+        "MODULE_DEF_IO",
         "MODULE_DEF_JSON",
         "MODULE_DEF_MATH",
         "MODULE_DEF_RANDOM",
@@ -55,6 +60,8 @@ REQUIRED_OUTPUT = {
     ),
     Path("genhdr/qstrdefs.generated.h"): (
         "MP_QSTR_StringIO",
+        "MP_QSTR_FileIO",
+        "MP_QSTR_TextIOWrapper",
         "MP_QSTR_dsp_processor",
         "MP_QSTR_execute",
         "MP_QSTR_process",
@@ -137,10 +144,22 @@ def generate(source: Path, temporary: Path) -> Path:
             raise RuntimeError(f"unexpected upstream content in {relative}")
         path.write_text(text.replace(original, replacement), encoding="utf-8")
 
+    upstream_port = source / "ports" / "embed" / "port"
+    for override in sorted(PORT_OVERRIDES.iterdir()):
+        if override.is_file():
+            shutil.copyfile(override, upstream_port / override.name)
+
     makefile = temporary / "micropython-embed-selected.mk"
     makefile.write_text(
         "SRC_QSTR := "
-        + " ".join(str(path) for path in SELECTED_EXTMOD_SOURCES)
+        + " ".join(
+            str(path)
+            for path in SELECTED_EXTMOD_SOURCES
+            + tuple(
+                Path("ports/embed/port") / relative
+                for relative in PORT_QSTR_SOURCES
+            )
+        )
         + "\ninclude "
         + str(source / "ports" / "embed" / "embed.mk")
         + "\n",

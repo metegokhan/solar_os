@@ -34,13 +34,11 @@ SolarOS uses MicroPython's size-conscious `EXTRA` language profile. This adds
 common language features such as f-strings, sets, properties, descriptors,
 `enumerate()`, `filter()`, `reversed()`, `memoryview`, and `frozenset`. The
 importable runtime modules are `array`, `binascii`, `cmath`, `collections`,
-`errno`, `gc`, `hashlib`, `json`, `math`, `micropython`, `random`, `struct`,
-and `sys`.
+`errno`, `gc`, `hashlib`, `io`, `json`, `math`, `micropython`, `random`,
+`struct`, and `sys`.
 
-File-backed imports, `open()`, `input()`, `execfile()`, and upstream `extmod`
-modules outside this selected set remain disabled until they have SolarOS
-storage, stream, cancellation, and ownership integration. Use the typed
-`solaros` service APIs instead.
+`input()`, `execfile()`, and upstream `extmod` modules outside this selected
+set remain disabled. Use the typed `solaros` service APIs instead.
 
 The selected modules include `json.loads()` and `json.dumps()`, hexadecimal and
 Base64 conversions in `binascii`, SHA-256 in `hashlib`, and the usual
@@ -50,6 +48,41 @@ hashing and an appropriate SolarOS security service, not `random`, for
 security-sensitive values.
 
 Functions that accept file paths use SolarOS shell-style paths. `/` means the default storage mount; internally this resolves to the active storage mount point.
+
+## Files and imports
+
+`open(path[, mode])` opens a file through SolarOS storage. Text mode is the
+default; add `b` for bytes. The supported base modes are `r`, `w`, `a`, and
+exclusive-create `x`, and each can use `+` for updating. File objects support
+`read`, `readinto`, `readline`, `readlines`, `write`, `seek`, `tell`, `flush`,
+and `close`, and can be used as context managers.
+
+```python
+with open("/notes/example.txt", "w") as output:
+    output.write("hello from Python\n")
+
+with open("/notes/example.txt") as source:
+    print(source.read())
+```
+
+Paths use the same preferred-storage and explicit-mount rules as
+`solaros.storage`. They cannot bypass SolarOS mounts to reach an unrelated
+host filesystem. Long reads and writes remain responsive to app cancellation.
+
+External imports support `.py`, `.mpy`, and package directories containing
+`__init__.py` or `__init__.mpy`. A file-run starts its search in the script's
+directory and then searches the other entries in `sys.path`. The REPL and
+source-runner start relative imports at the preferred storage root.
+
+```text
+/apps/weather/main.py
+/apps/weather/sensors.py
+/apps/weather/display/__init__.py
+```
+
+From `main.py`, both `import sensors` and `import display` resolve beside the
+script. Imported files pass through the same SolarOS path resolver as
+`open()`.
 
 The Python runtime package requires PSRAM. Hardware and network helpers are
 added only when the board/flavor includes their service package. For example,

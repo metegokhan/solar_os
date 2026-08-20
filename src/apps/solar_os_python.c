@@ -413,6 +413,38 @@ bool solar_os_micropython_stop_requested(void)
     return python_app.stop_requested;
 }
 
+int solar_os_micropython_resolve_path(const char *input,
+                                      char *output,
+                                      size_t output_len)
+{
+    const esp_err_t err = solar_os_storage_resolve_path(input, output, output_len);
+    if (err == ESP_OK) {
+        return 0;
+    }
+
+    switch (err) {
+    case ESP_ERR_INVALID_ARG:
+        errno = EINVAL;
+        break;
+    case ESP_ERR_INVALID_SIZE:
+        errno = ENAMETOOLONG;
+        break;
+    case ESP_ERR_NOT_FOUND:
+        errno = ENOENT;
+        break;
+    case ESP_ERR_NO_MEM:
+        errno = ENOMEM;
+        break;
+    case ESP_ERR_INVALID_STATE:
+        errno = ENODEV;
+        break;
+    default:
+        errno = EIO;
+        break;
+    }
+    return -1;
+}
+
 static const char *python_mode_name(void)
 {
     return python_app.mode == PYTHON_MODE_REPL ? "repl" : "script";
@@ -5978,6 +6010,32 @@ static void python_setup_argv(void)
     }
 }
 
+static void python_setup_import_path(const char *source_path)
+{
+    if (source_path == NULL || source_path[0] == '\0') {
+        return;
+    }
+
+    char resolved[SOLAR_OS_STORAGE_PATH_MAX];
+    if (solar_os_storage_resolve_path(source_path, resolved, sizeof(resolved)) != ESP_OK) {
+        return;
+    }
+
+    char *separator = strrchr(resolved, '/');
+    if (separator == NULL) {
+        return;
+    }
+    if (separator == resolved) {
+        separator[1] = '\0';
+    } else {
+        *separator = '\0';
+    }
+
+    mp_obj_list_store(mp_sys_path,
+                      MP_OBJ_NEW_SMALL_INT(0),
+                      mp_obj_new_str(resolved, strlen(resolved)));
+}
+
 static void python_setup_interactive_helpers(void)
 {
     mp_obj_t exit_obj = MP_OBJ_FROM_PTR(&python_builtin_exit_obj);
@@ -6123,6 +6181,9 @@ esp_err_t solar_os_python_run(const solar_os_script_run_request_t *request,
     python_app.vm_active = true;
     mp_embed_init(heap, PYTHON_HEAP_SIZE, &stack_top);
     python_register_solaros_module();
+    python_setup_import_path(request->input_type == SOLAR_OS_SCRIPT_INPUT_FILE
+                                 ? request->input
+                                 : NULL);
     python_setup_argv();
     python_setup_interactive_helpers();
 
@@ -6293,6 +6354,9 @@ static void python_task(void *arg)
     python_app.vm_active = true;
     mp_embed_init(heap, PYTHON_HEAP_SIZE, &stack_top);
     python_register_solaros_module();
+    python_setup_import_path(python_app.mode == PYTHON_MODE_SCRIPT
+                                 ? python_app.path
+                                 : NULL);
     python_setup_argv();
     python_setup_interactive_helpers();
 

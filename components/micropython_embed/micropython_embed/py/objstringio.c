@@ -33,8 +33,7 @@
 #include "py/runtime.h"
 #include "py/stream.h"
 
-/* SolarOS: json.loads uses StringIO while the public io module is disabled. */
-#if MICROPY_PY_IO || MICROPY_PY_JSON
+#if MICROPY_PY_IO
 
 #if MICROPY_CPYTHON_COMPAT
 static void check_stringio_is_open(const mp_obj_stringio_t *o) {

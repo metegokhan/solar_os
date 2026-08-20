@@ -27,6 +27,7 @@ class MicroPythonEmbedTest(unittest.TestCase):
             "ERRNO",
             "GC",
             "HASHLIB",
+            "IO",
             "JSON",
             "MATH",
             "MICROPYTHON",
@@ -43,15 +44,20 @@ class MicroPythonEmbedTest(unittest.TestCase):
         ):
             self.assertTrue((generate_micropython_embed.PACKAGE / relative).is_file())
 
-    def test_json_internal_stringio_is_compiled_without_public_io_module(self):
+    def test_public_io_module_and_file_types_are_generated(self):
         source = (
             generate_micropython_embed.PACKAGE / "py" / "objstringio.c"
         ).read_text(encoding="utf-8")
-        self.assertIn("#if MICROPY_PY_IO || MICROPY_PY_JSON", source)
+        self.assertIn("#if MICROPY_PY_IO", source)
         moduledefs = (
             generate_micropython_embed.PACKAGE / "genhdr" / "moduledefs.h"
         ).read_text(encoding="utf-8")
-        self.assertNotIn("MODULE_DEF_IO", moduledefs)
+        self.assertIn("MODULE_DEF_IO", moduledefs)
+        qstrs = (
+            generate_micropython_embed.PACKAGE / "genhdr" / "qstrdefs.generated.h"
+        ).read_text(encoding="utf-8")
+        self.assertIn("MP_QSTR_FileIO", qstrs)
+        self.assertIn("MP_QSTR_TextIOWrapper", qstrs)
 
     def test_selected_standard_modules_are_enabled(self):
         config = (
@@ -67,6 +73,9 @@ class MicroPythonEmbedTest(unittest.TestCase):
             "MICROPY_PY_MATH",
             "MICROPY_PY_STRUCT",
             "MICROPY_PY_COLLECTIONS",
+            "MICROPY_ENABLE_EXTERNAL_IMPORT",
+            "MICROPY_PY_IO",
+            "MICROPY_READER_POSIX",
         ):
             self.assertRegex(config, rf"#define {feature}\s+\(1\)")
 
@@ -75,10 +84,8 @@ class MicroPythonEmbedTest(unittest.TestCase):
             generate_micropython_embed.COMPONENT / "mpconfigport.h"
         ).read_text(encoding="utf-8")
         for feature in (
-            "MICROPY_ENABLE_EXTERNAL_IMPORT",
             "MICROPY_PY_BUILTINS_EXECFILE",
             "MICROPY_PY_BUILTINS_INPUT",
-            "MICROPY_PY_IO",
             "MICROPY_PY_SYS_STDFILES",
             "MICROPY_PY_ASYNCIO",
             "MICROPY_PY_OS",
@@ -89,6 +96,22 @@ class MicroPythonEmbedTest(unittest.TestCase):
             "MICROPY_PY_WEBSOCKET",
         ):
             self.assertRegex(config, rf"#define {feature}\s+\(0\)")
+
+    def test_import_reader_uses_solaros_path_resolution(self):
+        source = (
+            generate_micropython_embed.PACKAGE / "py" / "reader.c"
+        ).read_text(encoding="utf-8")
+        self.assertIn("solar_os_micropython_resolve_path", source)
+        self.assertIn("int fd = open(resolved, O_RDONLY, 0644);", source)
+
+    def test_port_provides_solaros_open_and_import_stat(self):
+        source = (
+            generate_micropython_embed.PORT_OVERRIDES / "solaros_file.c"
+        ).read_text(encoding="utf-8")
+        self.assertIn("mp_obj_t mp_builtin_open", source)
+        self.assertIn("mp_import_stat_t mp_import_stat", source)
+        self.assertIn("O_EXCL", source)
+        self.assertIn("solar_os_micropython_stop_requested", source)
 
     def test_solaros_port_overrides_match_vendored_output(self):
         for override in generate_micropython_embed.PORT_OVERRIDES.iterdir():
