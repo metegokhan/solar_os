@@ -2,6 +2,9 @@
 
 ## 4.x
 
+- **4.8.4** — 2026-08-20 — MicroPython embed generation is pinned and
+  reproducible, including the SolarOS qstr and port overrides. The configured
+  `array` module is now registered and importable from Python.
 - **4.8.3** — 2026-08-12 — Gateway Chat now uses the global SolarOS user and
   hostname identity instead of a separate saved username. Added CRC-verified
   NVS backup and restore to disk with `/.solar/nvs.bin` as the default file.
