@@ -652,6 +652,7 @@ static void notes_render(solar_os_context_t *ctx)
         notes_render_row(&notes.view[notes.top + visible], row + visible, cols);
     }
 
+    solar_os_tui_draw_help(&notes.tui, notes_help_text());
     if (notes.input_mode != NOTES_INPUT_NONE) {
         const char *label = notes_input_label();
         solar_os_tui_input_state_t input_state = {
@@ -669,7 +670,6 @@ static void notes_render(solar_os_context_t *ctx)
                          notes.message,
                          SOLAR_OS_TUI_ATTR_NORMAL);
     }
-    solar_os_tui_draw_help(&notes.tui, notes_help_text());
     solar_os_tui_refresh(&notes.tui);
 }
 
