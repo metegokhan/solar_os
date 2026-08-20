@@ -12,6 +12,7 @@
 #include "solar_os_display.h"
 #include "solar_os_input.h"
 #include "solar_os_keys.h"
+#include "solar_os_power.h"
 #if SOLAR_OS_PACKAGE_SERVICE_OTA
 #include "solar_os_ota.h"
 #endif
@@ -42,6 +43,7 @@ typedef enum {
     SETTERM_TUI_STATUSBAR,
     SETTERM_TUI_BRIGHTNESS,
     SETTERM_TUI_KEYBOARD,
+    SETTERM_TUI_POWERKEY,
     SETTERM_TUI_KEYRATE,
     SETTERM_TUI_TIMEZONE,
     SETTERM_TUI_STARTUP,
@@ -78,6 +80,7 @@ static const setterm_tui_item_def_t setterm_tui_items[] = {
     [SETTERM_TUI_STATUSBAR] = {.label = "statusbar"},
     [SETTERM_TUI_BRIGHTNESS] = {.label = "brightness"},
     [SETTERM_TUI_KEYBOARD] = {.label = "keyboard"},
+    [SETTERM_TUI_POWERKEY] = {.label = "powerkey"},
     [SETTERM_TUI_KEYRATE] = {.label = "keyrate"},
     [SETTERM_TUI_TIMEZONE] = {.label = "timezone"},
     [SETTERM_TUI_STARTUP] = {.label = "startup"},
@@ -167,6 +170,14 @@ static void setterm_tui_current_value(setterm_tui_item_t item, char *buffer, siz
                 solar_os_input_keyboard_layout_name(solar_os_input_keyboard_layout()),
                 buffer_len);
         break;
+    case SETTERM_TUI_POWERKEY: {
+        solar_os_power_status_t status;
+        solar_os_power_get_status(&status);
+        strlcpy(buffer,
+                solar_os_power_key_action_name(status.key_action),
+                buffer_len);
+        break;
+    }
     case SETTERM_TUI_KEYRATE: {
         uint16_t rate = 0;
         uint16_t delay_ms = 0;
@@ -319,6 +330,7 @@ static bool setterm_tui_cycle_selected(int direction)
     static const char * const palette_values[] = {"normal", "inverted"};
     static const char * const statusbar_values[] = {"show", "hide"};
     static const char * const brightness_values[] = {"0", "25", "50", "75", "100"};
+    static const char * const powerkey_values[] = {"sleep", "suspend"};
     static const char * const startup_values[] = {"flash", "sd"};
 #if SOLAR_OS_PACKAGE_SERVICE_BLE
     static const char * const keyboard_values[] = {"us", "de"};
@@ -355,6 +367,10 @@ static bool setterm_tui_cycle_selected(int direction)
                                        sizeof(keyboard_values) / sizeof(keyboard_values[0]),
                                        direction);
 #endif
+    case SETTERM_TUI_POWERKEY:
+        return setterm_tui_cycle_value(powerkey_values,
+                                       sizeof(powerkey_values) / sizeof(powerkey_values[0]),
+                                       direction);
     case SETTERM_TUI_STARTUP:
         return setterm_tui_cycle_value(
             startup_values,
@@ -475,6 +491,13 @@ static bool setterm_tui_apply_selected(void)
         solar_os_input_keyboard_layout_t layout;
         return solar_os_input_parse_keyboard_layout(setterm_tui.edit_text, &layout) &&
             solar_os_input_set_keyboard_layout(layout) == ESP_OK;
+    }
+    case SETTERM_TUI_POWERKEY: {
+        solar_os_power_key_action_t action;
+        return solar_os_power_parse_key_action(setterm_tui.edit_text, &action) &&
+            (action == SOLAR_OS_POWER_KEY_ACTION_SLEEP ||
+             action == SOLAR_OS_POWER_KEY_ACTION_SUSPEND) &&
+            solar_os_power_set_key_action(action) == ESP_OK;
     }
     case SETTERM_TUI_KEYRATE:
         return setterm_tui_apply_keyrate();

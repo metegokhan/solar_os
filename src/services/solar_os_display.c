@@ -104,6 +104,7 @@ static uint8_t *display_detach_export_buffer_locked(display_target_slot_t *slot)
 #if SOLAR_OS_BOARD_HAS_DISPLAY
 static solar_os_board_display_t *display_handle;
 static uint8_t display_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
+static bool display_primary_suspended;
 
 static esp_err_t display_save_brightness(uint8_t percent)
 {
@@ -632,6 +633,62 @@ esp_err_t solar_os_display_set_brightness(uint8_t percent)
 #endif
 }
 
+esp_err_t solar_os_display_suspend_primary(void)
+{
+#if !SOLAR_OS_BOARD_HAS_DISPLAY
+    return ESP_ERR_NOT_SUPPORTED;
+#else
+    if (display_handle == NULL || display_handle->u8g2 == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    portENTER_CRITICAL(&display_targets_lock);
+    const bool already_suspended = display_primary_suspended;
+    display_primary_suspended = true;
+    portEXIT_CRITICAL(&display_targets_lock);
+    if (already_suspended) {
+        return ESP_OK;
+    }
+
+    u8g2_SetPowerSave(display_handle->u8g2, 1);
+    return ESP_OK;
+#endif
+}
+
+esp_err_t solar_os_display_resume_primary(void)
+{
+#if !SOLAR_OS_BOARD_HAS_DISPLAY
+    return ESP_ERR_NOT_SUPPORTED;
+#else
+    if (display_handle == NULL || display_handle->u8g2 == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    portENTER_CRITICAL(&display_targets_lock);
+    const bool suspended = display_primary_suspended;
+    portEXIT_CRITICAL(&display_targets_lock);
+    if (!suspended) {
+        return ESP_OK;
+    }
+
+    u8g2_SetPowerSave(display_handle->u8g2, 0);
+    portENTER_CRITICAL(&display_targets_lock);
+    display_primary_suspended = false;
+    portEXIT_CRITICAL(&display_targets_lock);
+    return ESP_OK;
+#endif
+}
+
+bool solar_os_display_primary_suspended(void)
+{
+#if !SOLAR_OS_BOARD_HAS_DISPLAY
+    return false;
+#else
+    portENTER_CRITICAL(&display_targets_lock);
+    const bool suspended = display_primary_suspended;
+    portEXIT_CRITICAL(&display_targets_lock);
+    return suspended;
+#endif
+}
+
 esp_err_t solar_os_display_set_palette_inverted(const char *name, bool inverted)
 {
     if (!display_target_name_valid(name, SOLAR_OS_DISPLAY_TARGET_NAME_MAX)) {
@@ -851,6 +908,10 @@ esp_err_t solar_os_display_present_mono_xbm(u8g2_t *u8g2,
         portEXIT_CRITICAL(&display_targets_lock);
         return ESP_ERR_NOT_SUPPORTED;
     }
+    if (display_primary_suspended && board_display == display_handle) {
+        portEXIT_CRITICAL(&display_targets_lock);
+        return ESP_OK;
+    }
     generation = slot->generation;
     slot->refs++;
     portEXIT_CRITICAL(&display_targets_lock);
@@ -945,6 +1006,18 @@ void solar_os_display_present(u8g2_t *u8g2, solar_os_display_present_mode_t mode
     }
     (void)solar_os_display_request_present_mode(u8g2, mode);
     display_publish_frame(u8g2);
+
+#if SOLAR_OS_BOARD_HAS_DISPLAY
+    portENTER_CRITICAL(&display_targets_lock);
+    const int slot_index = display_find_slot_by_u8g2_locked(u8g2);
+    const bool suspended = slot_index >= 0 &&
+        display_targets[slot_index].board_display == display_handle &&
+        display_primary_suspended;
+    portEXIT_CRITICAL(&display_targets_lock);
+    if (suspended) {
+        return;
+    }
+#endif
     u8g2_SendBuffer(u8g2);
 }
 

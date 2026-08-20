@@ -437,6 +437,81 @@ static void resume_display_after_sleep(uint32_t now_ms)
 #endif
 }
 
+static void enter_suspend(const char *reason)
+{
+    if (!board_has(SOLAR_OS_BOARD_CAP_KEY)) {
+        SOLAR_OS_LOGW(TAG, "%s: suspend needs a KEY resume source", reason);
+        return;
+    }
+
+    solar_os_power_status_t status;
+    solar_os_power_get_status(&status);
+    if (status.suspend_active) {
+        return;
+    }
+
+    update_status();
+    draw_terminal_if_needed();
+
+    esp_err_t err = solar_os_power_begin_suspend();
+    if (err != ESP_OK) {
+        SOLAR_OS_LOGW(TAG, "%s: suspend power policy failed: %s",
+                      reason, esp_err_to_name(err));
+        return;
+    }
+
+    err = solar_os_display_suspend_primary();
+    if (err != ESP_OK && err != ESP_ERR_NOT_SUPPORTED) {
+        SOLAR_OS_LOGW(TAG, "%s: display suspend failed: %s",
+                      reason, esp_err_to_name(err));
+        (void)solar_os_power_end_suspend();
+        return;
+    }
+
+    session_overlay_until_ms = 0;
+    session_overlay_title[0] = '\0';
+    SOLAR_OS_LOGI(TAG,
+                  "%s: suspended; profile=lowpower restore=%s",
+                  reason,
+                  solar_os_power_profile_name(status.profile));
+}
+
+static void exit_suspend(const char *reason)
+{
+    solar_os_power_status_t status;
+    solar_os_power_get_status(&status);
+    if (!status.suspend_active) {
+        return;
+    }
+
+    const esp_err_t power_err = solar_os_power_end_suspend();
+    if (power_err != ESP_OK) {
+        SOLAR_OS_LOGW(TAG, "%s: profile restore failed: %s",
+                      reason, esp_err_to_name(power_err));
+    }
+
+    const esp_err_t display_err = solar_os_display_resume_primary();
+    if (display_err != ESP_OK && display_err != ESP_ERR_NOT_SUPPORTED) {
+        SOLAR_OS_LOGW(TAG, "%s: display resume failed: %s",
+                      reason, esp_err_to_name(display_err));
+    }
+
+    const uint32_t now_ms = millis_u32();
+    solar_os_power_note_activity(now_ms);
+    last_app_tick_ms = now_ms;
+    last_status_update_ms = 0;
+    update_status();
+    if (solar_os_context_graphics_active(&os_ctx)) {
+        dispatch_app_resume(now_ms);
+    } else if (terminal != NULL) {
+        terminal->dirty = true;
+        draw_terminal_if_needed();
+    }
+    SOLAR_OS_LOGI(TAG, "%s: resumed; profile=%s",
+                  reason,
+                  solar_os_power_profile_name(status.profile));
+}
+
 static esp_err_t key_button_configure_gpio(void)
 {
     const gpio_config_t key_config = {
@@ -698,12 +773,20 @@ static void handle_key_short_press(void)
     solar_os_power_status_t power_status;
     solar_os_power_get_status(&power_status);
 
+    if (power_status.suspend_active) {
+        exit_suspend("KEY short press");
+        return;
+    }
+
     switch (power_status.key_action) {
     case SOLAR_OS_POWER_KEY_ACTION_OFF:
         SOLAR_OS_LOGI(TAG, "KEY short press: sleep disabled");
         break;
-    case SOLAR_OS_POWER_KEY_ACTION_LIGHT:
+    case SOLAR_OS_POWER_KEY_ACTION_SLEEP:
         enter_light_sleep("KEY short press");
+        break;
+    case SOLAR_OS_POWER_KEY_ACTION_SUSPEND:
+        enter_suspend("KEY short press");
         break;
     default:
         SOLAR_OS_LOGW(TAG, "KEY short press: unknown power action");
@@ -1370,6 +1453,9 @@ static void process_app_requests(void)
 
     if (solar_os_context_take_sleep_request(&os_ctx)) {
         enter_light_sleep("shell sleep");
+    }
+    if (solar_os_context_take_suspend_request(&os_ctx)) {
+        enter_suspend("shell suspend");
     }
 
     solar_os_sessions_process_requests();

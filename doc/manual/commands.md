@@ -94,7 +94,7 @@ The display-shell app exit chord is `CTRL+ALT+DEL`. Port shells use `Ctrl+]`.
 | `inbox` | `inbox delete <id>` | Delete one message by its decimal ID. |
 | `inbox` | `inbox clear` | Remove every message. |
 | `inbox` | `inbox post <source> <message>` | Post a message from a shell script or for testing. |
-| `inbox` | `inbox notify [on\|off\|test]` | Show, persist, disable, or test the optional Inbox notification sound. It defaults to off and is unavailable on boards without audio output. |
+| `inbox` | `inbox notify [on\|off\|test]` | Show, persist, disable, or test the Inbox notification sound. It defaults to on and is unavailable on boards without audio output. |
 | `contacts` | `contacts` | Open the searchable provider-neutral contact browser. |
 | `contacts` | `contacts status` | Show contact, endpoint, persistence, PSRAM, and opaque-credential counts. |
 | `contacts` | `contacts list [all\|discovered\|trusted\|blocked]` | List contacts, optionally filtered by endpoint trust. |
@@ -214,6 +214,7 @@ job for periodic polling.
 | `mem` | `mem [policy]` | Print heap status; `policy` also shows allocation-class counters, guarded fallback limits, and the last tagged failure. |
 | `top` | `top` | Print FreeRTOS task resource information when available. |
 | `sleep` | `sleep` | Enter explicit light sleep. |
+| `suspend` | `suspend` | Turn off the primary display and temporarily use the `lowpower` profile while services and jobs continue. Press KEY to resume. |
 | `power` | See below | Inspect and configure power policy. |
 | `setterm` | See below | Configure terminal/input preferences. Without arguments, opens the display TUI when available. |
 
@@ -223,18 +224,31 @@ job for periodic polling.
 power status
 power profile [performance|balanced|battery|lowpower]
 power idle [off|seconds]
-power key [off|light]
+power key [off|sleep|suspend]
 power sleep
+power suspend
 ```
 
 Profiles:
 
 | Profile | Behavior |
 | --- | --- |
-| `performance` | CPU fixed at 240 MHz, no automatic light sleep. |
-| `balanced` | CPU fixed at 160 MHz, no automatic light sleep. This is the default. |
+| `performance` | CPU fixed at 240 MHz, no automatic light sleep. This is the default. |
+| `balanced` | CPU fixed at 160 MHz, no automatic light sleep. |
 | `battery` | CPU fixed at 160 MHz with ESP-IDF automatic light sleep. |
 | `lowpower` | CPU fixed at 80 MHz with automatic light sleep and display-shell idle sleep after 60 seconds. |
+
+Suspend is different from explicit light sleep. It keeps the runtime, radios,
+background jobs, Inbox notifications, and audio active while the primary
+display is off. It temporarily uses the `lowpower` profile and prevents the
+idle policy from entering explicit light sleep. Another short press of KEY
+resumes the display and restores the selected profile. `power status` shows
+the selected profile, effective profile, and suspend state.
+
+`power key` retains `off` for compatibility. `sleep` uses the existing light
+sleep path, and `suspend` toggles the runtime suspend state. The default for a
+new or cleared NVS configuration is `suspend`; an existing saved value remains
+unchanged.
 
 `setterm` usage:
 
@@ -250,6 +264,7 @@ setterm backlight [0..100]
 setterm profile [vt100|ansi|dumb]
 setterm charset [utf8|ascii]
 setterm keyboard [us|de]
+setterm powerkey [sleep|suspend]
 setterm keyrate [off|1..60 [delay-ms]]
 setterm timezone [UTC|Europe/Berlin|POSIX-TZ]
 setterm startup [flash|sd]
@@ -259,6 +274,10 @@ setterm otaurl [url]
 `setterm keyrate` configures the shared repeat policy for BLE keyboards, fixed
 board buttons, `gpio-keys`, joysticks, ADC D-pads, and future keyboard buses.
 The value is stored in NVS and is available on builds without BLE.
+
+`setterm powerkey` selects the dedicated KEY short-press action. `sleep`
+enters explicit light sleep; `suspend` turns off the display while jobs and
+services continue. `setterm key` is accepted as a shorter alias.
 
 `setterm startup` selects the volume used for `.shell/startup` on the next boot.
 The default is `flash`. Selecting `sd` is rejected on boards without SD support.
@@ -275,7 +294,9 @@ Display layout settings (`orientation`, `font`, `textsize`, `palette`, and
 `statusbar`) apply
 to the current display and its app sessions. Settings on the primary display
 are persistent; settings on secondary or virtual displays such as `web0` are
-runtime-only. `palette` exchanges logical black and white in terminal content
+runtime-only. When no saved values exist, the font defaults to `compact` and
+the text size defaults to `16`. `palette` exchanges logical black and white in
+terminal content
 and in the shared graphics palette; dithered shades are reversed as well. It
 remains independent of hardware inversion modes exposed by `display mode`, and
 does not rewrite an existing framebuffer. On a headless board, a port shell can

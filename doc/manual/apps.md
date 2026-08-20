@@ -746,9 +746,9 @@ Each list item occupies exactly one terminal row: unread/priority markers,
 local reception date and time, a compact source (`chat/general`, `email`, or
 `pocsag`), and as much of the message body preview as fits the screen.
 
-Optional notification sound is disabled by default. Press `s` in the Inbox or
+Notification sound is enabled by default on boards with audio. Press `s` in the Inbox or
 use `inbox notify on`, `inbox notify off`, or `inbox notify test`; the setting
-is persistent and is available only on boards with audio output.
+is persistent. Notification tones remain active while SolarOS is suspended.
 
 Usage:
 

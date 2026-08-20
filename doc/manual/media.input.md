@@ -90,7 +90,9 @@ service initialization.
 `ble forget` erases the remembered keyboard from SolarOS NVS and removes its BLE
 bond. On boards with a system KEY, a long press performs that forget operation
 and then starts a new pairing scan. Pairing has no user cancellation path. The
-KEY short-press power action remains separately configurable.
+KEY short-press power action remains separately configurable with
+`setterm powerkey sleep|suspend`. Suspend is the default; another short press
+resumes the display and restores the prior power profile.
 
 ## Clipboard
 

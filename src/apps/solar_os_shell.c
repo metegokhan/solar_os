@@ -365,6 +365,7 @@ static const shell_command_t shell_builtin_commands[] = {
     {"display", "list display targets", solar_os_shell_cmd_display},
     {"clear", "clear the screen", solar_os_shell_cmd_clear},
     {"sleep", "enter light sleep", solar_os_shell_cmd_sleep},
+    {"suspend", "keep services running with the display off", solar_os_shell_cmd_suspend},
     {"power", "power profile and sleep policy", solar_os_shell_cmd_power},
     {"watch", "repeat a command", cmd_watch},
     {"setterm", "configure terminal settings", solar_os_shell_cmd_setterm},
@@ -540,6 +541,8 @@ static const char * const setterm_subcommands[] = {
     "charset",
     "keyboard",
     "keymap",
+    "powerkey",
+    "key",
     "keyrate",
     "typerate",
     "repeat",
@@ -558,6 +561,7 @@ static const char * const setterm_brightness_values[] = {"0", "25", "50", "75", 
 static const char * const setterm_profile_values[] = {"vt100", "ansi", "dumb"};
 static const char * const setterm_charset_values[] = {"utf8", "ascii"};
 static const char * const setterm_keyboard_values[] = {"us", "de"};
+static const char * const setterm_powerkey_values[] = {"sleep", "suspend"};
 static const char * const setterm_keyrate_values[] = {"off"};
 static const char * const setterm_timezone_values[] = {"UTC", "Europe/Berlin"};
 static const char * const setterm_startup_values[] = {"flash", "sd"};
@@ -1136,6 +1140,7 @@ static const char * const power_subcommands[] = {
     "idle",
     "key",
     "sleep",
+    "suspend",
 };
 
 static const char * const power_profile_values[] = {
@@ -1145,7 +1150,7 @@ static const char * const power_profile_values[] = {
     "lowpower",
 };
 static const char * const power_idle_values[] = {"off"};
-static const char * const power_key_values[] = {"off", "light"};
+static const char * const power_key_values[] = {"off", "sleep", "suspend"};
 
 static const char * const battery_subcommands[] = {
     "status",
@@ -1438,6 +1443,8 @@ static const char * const path_setterm_profile[] = {"setterm", "profile"};
 static const char * const path_setterm_charset[] = {"setterm", "charset"};
 static const char * const path_setterm_keyboard[] = {"setterm", "keyboard"};
 static const char * const path_setterm_keymap[] = {"setterm", "keymap"};
+static const char * const path_setterm_powerkey[] = {"setterm", "powerkey"};
+static const char * const path_setterm_key[] = {"setterm", "key"};
 static const char * const path_setterm_keyrate[] = {"setterm", "keyrate"};
 static const char * const path_setterm_typerate[] = {"setterm", "typerate"};
 static const char * const path_setterm_repeat[] = {"setterm", "repeat"};
@@ -2515,6 +2522,8 @@ static const shell_completion_rule_t shell_completion_rules[] = {
     SHELL_COMPLETION_STATIC(path_setterm_charset, setterm_charset_values),
     SHELL_COMPLETION_STATIC(path_setterm_keyboard, setterm_keyboard_values),
     SHELL_COMPLETION_STATIC(path_setterm_keymap, setterm_keyboard_values),
+    SHELL_COMPLETION_STATIC(path_setterm_powerkey, setterm_powerkey_values),
+    SHELL_COMPLETION_STATIC(path_setterm_key, setterm_powerkey_values),
     SHELL_COMPLETION_STATIC(path_setterm_keyrate, setterm_keyrate_values),
     SHELL_COMPLETION_STATIC(path_setterm_typerate, setterm_keyrate_values),
     SHELL_COMPLETION_STATIC(path_setterm_repeat, setterm_keyrate_values),
