@@ -112,6 +112,7 @@
 #include "solar_os_task.h"
 #include "solar_os_time.h"
 #include "solar_os_tui.h"
+#include "solar_os_tui_widgets.h"
 #if SOLAR_OS_PACKAGE_SERVICE_UART
 #include "solar_os_uart.h"
 #endif
@@ -154,6 +155,11 @@ typedef enum {
     SOLUA_EVENT_TUI_VRULE,
     SOLUA_EVENT_TUI_BOX,
     SOLUA_EVENT_TUI_FILL,
+    SOLUA_EVENT_TUI_CELL,
+    SOLUA_EVENT_TUI_TITLE,
+    SOLUA_EVENT_TUI_HELP,
+    SOLUA_EVENT_TUI_TAB,
+    SOLUA_EVENT_TUI_INPUT,
     SOLUA_EVENT_GFX_BEGIN,
     SOLUA_EVENT_GFX_END,
     SOLUA_EVENT_GFX_CLEAR,
@@ -4848,6 +4854,163 @@ static int solua_tui_fill(lua_State *L)
     return 0;
 }
 
+static void solua_tui_text_event(lua_State *L,
+                                 solua_event_type_t type,
+                                 uint16_t row,
+                                 uint16_t col,
+                                 uint16_t width,
+                                 const char *first,
+                                 size_t first_len,
+                                 const char *second,
+                                 size_t second_len,
+                                 uint8_t attr,
+                                 bool selected,
+                                 int32_t cursor,
+                                 int32_t view)
+{
+    if (first_len + (second != NULL ? second_len + 1U : 0U) >= SOLUA_EVENT_DATA_MAX) {
+        luaL_error(L, "tui text too long");
+    }
+    solua_event_t event = {
+        .type = type, .row = row, .col = col, .width = width,
+        .attr = attr, .success = selected, .x0 = cursor, .x1 = view,
+        .data_len = first_len,
+    };
+    memcpy(event.data, first, first_len);
+    event.data[first_len] = '\0';
+    if (second != NULL) {
+        memcpy(event.data + first_len + 1U, second, second_len);
+        event.data[first_len + 1U + second_len] = '\0';
+    }
+    solua_ui_send_event(L, &event);
+}
+
+static void solua_tui_push_rect(lua_State *L, const solar_os_tui_rect_t *rect)
+{
+    lua_createtable(L, 4, 0);
+    lua_pushinteger(L, (lua_Integer)rect->row); lua_rawseti(L, -2, 1);
+    lua_pushinteger(L, (lua_Integer)rect->col); lua_rawseti(L, -2, 2);
+    lua_pushinteger(L, (lua_Integer)rect->height); lua_rawseti(L, -2, 3);
+    lua_pushinteger(L, (lua_Integer)rect->width); lua_rawseti(L, -2, 4);
+}
+
+static int solua_tui_layout(lua_State *L)
+{
+    const size_t tabs = lua_isnoneornil(L, 1) ? 0 : solua_check_size(L, 1);
+    const size_t status = lua_isnoneornil(L, 2) ? 0 : solua_check_size(L, 2);
+    const size_t input = lua_isnoneornil(L, 3) ? 0 : solua_check_size(L, 3);
+    solar_os_shell_io_t *io = solua_current_io();
+    solar_os_tui_screen_layout_t layout;
+    if (io == NULL || !solar_os_tui_layout_compute(solar_os_shell_io_rows(io),
+                                                    solar_os_shell_io_cols(io),
+                                                    tabs, status, input, &layout)) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_createtable(L, 6, 0);
+    const solar_os_tui_rect_t *rects[] = {
+        &layout.title, &layout.tabs, &layout.body,
+        &layout.status, &layout.input, &layout.help,
+    };
+    for (int i = 0; i < 6; i++) {
+        solua_tui_push_rect(L, rects[i]);
+        lua_rawseti(L, -2, i + 1);
+    }
+    return 1;
+}
+
+static int solua_tui_cell(lua_State *L)
+{
+    size_t len = 0;
+    const char *text = luaL_checklstring(L, 4, &len);
+    solua_tui_text_event(L, SOLUA_EVENT_TUI_CELL,
+                         solua_check_u16_size(L, 1), solua_check_u16_size(L, 2),
+                         solua_check_u16_size(L, 3), text, len, NULL, 0,
+                         solua_optional_tui_attr(L, 5), false, 0, 0);
+    return 0;
+}
+
+static int solua_tui_title(lua_State *L)
+{
+    size_t title_len = 0, detail_len = 0;
+    const char *title = luaL_checklstring(L, 1, &title_len);
+    const char *detail = lua_isnoneornil(L, 2) ? "" : luaL_checklstring(L, 2, &detail_len);
+    solua_tui_text_event(L, SOLUA_EVENT_TUI_TITLE, 0, 0, 0, title, title_len,
+                         detail, detail_len, 0, false, 0, 0);
+    return 0;
+}
+
+static int solua_tui_help(lua_State *L)
+{
+    size_t len = 0;
+    const char *text = luaL_checklstring(L, 1, &len);
+    solua_tui_text_event(L, SOLUA_EVENT_TUI_HELP, 0, 0, 0, text, len,
+                         NULL, 0, 0, false, 0, 0);
+    return 0;
+}
+
+static int solua_tui_tab(lua_State *L)
+{
+    size_t len = 0;
+    const char *text = luaL_checklstring(L, 4, &len);
+    solua_tui_text_event(L, SOLUA_EVENT_TUI_TAB,
+                         solua_check_u16_size(L, 1), solua_check_u16_size(L, 2),
+                         solua_check_u16_size(L, 3), text, len, NULL, 0, 0,
+                         lua_toboolean(L, 5), 0, 0);
+    return 0;
+}
+
+static int solua_tui_list_move(lua_State *L)
+{
+    solar_os_tui_viewport_t viewport = {
+        .cursor = solua_check_size(L, 1), .top = solua_check_size(L, 2),
+    };
+    const bool moved = solar_os_tui_viewport_key(&viewport, solua_check_u8(L, 5),
+        solua_check_size(L, 3), solua_check_size(L, 4),
+        !lua_isnoneornil(L, 6) && lua_toboolean(L, 6));
+    lua_pushinteger(L, (lua_Integer)viewport.cursor);
+    lua_pushinteger(L, (lua_Integer)viewport.top);
+    lua_pushboolean(L, moved);
+    return 3;
+}
+
+static int solua_tui_input_edit(lua_State *L)
+{
+    size_t len = 0;
+    const char *source = luaL_checklstring(L, 1, &len);
+    size_t capacity = solua_check_size(L, 6);
+    if (capacity > SOLUA_EVENT_DATA_MAX) capacity = SOLUA_EVENT_DATA_MAX;
+    if (capacity < len + 1U) capacity = len + 1U;
+    if (capacity > SOLUA_EVENT_DATA_MAX) return luaL_error(L, "input too long");
+    char text[SOLUA_EVENT_DATA_MAX];
+    memcpy(text, source, len);
+    text[len] = '\0';
+    solar_os_tui_input_state_t state = {
+        .cursor = solua_check_size(L, 2), .view = solua_check_size(L, 3),
+    };
+    const solar_os_tui_input_action_t action = solar_os_tui_input_key(
+        text, capacity, &state, solua_check_u32(L, 4), solua_check_size(L, 5));
+    lua_pushstring(L, text);
+    lua_pushinteger(L, (lua_Integer)state.cursor);
+    lua_pushinteger(L, (lua_Integer)state.view);
+    lua_pushinteger(L, (lua_Integer)action);
+    return 4;
+}
+
+static int solua_tui_input(lua_State *L)
+{
+    size_t label_len = 0, text_len = 0;
+    const char *label = luaL_checklstring(L, 4, &label_len);
+    const char *text = luaL_checklstring(L, 5, &text_len);
+    solua_tui_text_event(L, SOLUA_EVENT_TUI_INPUT,
+                         solua_check_u16_size(L, 1), solua_check_u16_size(L, 2),
+                         solua_check_u16_size(L, 3), label, label_len, text, text_len,
+                         solua_optional_tui_attr(L, 8), false,
+                         (int32_t)solua_check_size(L, 6),
+                         (int32_t)solua_check_size(L, 7));
+    return 0;
+}
+
 static int solua_tui_getch(lua_State *L)
 {
     const uint32_t timeout_ms = solua_optional_u32(L, 1, 0);
@@ -6203,6 +6366,33 @@ static void solua_apply_tui_event(solar_os_context_t *ctx, const solua_event_t *
                           event->codepoint,
                           event->attr);
         break;
+    case SOLUA_EVENT_TUI_CELL:
+        solar_os_tui_write_cell(&tui, event->row, event->col, event->width,
+                                event->data, event->attr);
+        break;
+    case SOLUA_EVENT_TUI_TITLE:
+        solar_os_tui_draw_title(&tui, event->data,
+                                event->data_len + 1U < sizeof(event->data) ?
+                                    event->data + event->data_len + 1U : "");
+        break;
+    case SOLUA_EVENT_TUI_HELP:
+        solar_os_tui_draw_help(&tui, event->data);
+        break;
+    case SOLUA_EVENT_TUI_TAB:
+        solar_os_tui_draw_tab(&tui, event->row, event->col, event->width,
+                              event->data, event->success);
+        break;
+    case SOLUA_EVENT_TUI_INPUT: {
+        solar_os_tui_input_state_t state = {
+            .cursor = event->x0 >= 0 ? (size_t)event->x0 : 0,
+            .view = event->x1 >= 0 ? (size_t)event->x1 : 0,
+        };
+        const char *text = event->data_len + 1U < sizeof(event->data) ?
+            event->data + event->data_len + 1U : "";
+        solar_os_tui_draw_input(&tui, event->row, event->col, event->width,
+                                event->data, text, &state, event->attr);
+        break;
+    }
     default:
         break;
     }
@@ -6331,6 +6521,11 @@ static void solua_drain_events(solar_os_context_t *ctx)
         case SOLUA_EVENT_TUI_VRULE:
         case SOLUA_EVENT_TUI_BOX:
         case SOLUA_EVENT_TUI_FILL:
+        case SOLUA_EVENT_TUI_CELL:
+        case SOLUA_EVENT_TUI_TITLE:
+        case SOLUA_EVENT_TUI_HELP:
+        case SOLUA_EVENT_TUI_TAB:
+        case SOLUA_EVENT_TUI_INPUT:
             solua_apply_tui_event(ctx, &event);
             break;
         case SOLUA_EVENT_GFX_BEGIN:

@@ -19,6 +19,7 @@
 #include "solar_os_messaging.h"
 #include "solar_os_terminal.h"
 #include "solar_os_tui.h"
+#include "solar_os_tui_widgets.h"
 
 #define CHAT_APP_SYSTEM_CHANNEL "system"
 #define CHAT_APP_CHANNEL_COUNT 33
@@ -355,29 +356,6 @@ static size_t chat_take_columns(const char *text,
 static size_t chat_safe_clip_len(const char *text, size_t max_cols, size_t max_bytes)
 {
     return chat_take_columns(text, max_cols, max_bytes, NULL);
-}
-
-static void chat_write_cell(size_t row,
-                            size_t col,
-                            size_t width,
-                            const char *text,
-                            uint8_t attr)
-{
-    if (width == 0 || row >= solar_os_tui_rows(&chat_app.tui) ||
-        col >= solar_os_tui_cols(&chat_app.tui)) {
-        return;
-    }
-
-    solar_os_tui_fill(&chat_app.tui, row, col, 1, width, ' ', attr);
-    if (text == NULL || text[0] == '\0') {
-        return;
-    }
-
-    char clipped[CHAT_APP_LINE_MAX];
-    const size_t copy_len = chat_safe_clip_len(text, width, sizeof(clipped) - 1U);
-    memcpy(clipped, text, copy_len);
-    clipped[copy_len] = '\0';
-    solar_os_tui_addstr(&chat_app.tui, row, col, clipped, attr);
 }
 
 static uint8_t chat_add_system_channel(void)
@@ -1083,7 +1061,7 @@ static void chat_draw_visual_line(const char *line,
     }
 
     if (ctx->visual_index >= ctx->first_visible && ctx->drawn < ctx->max_rows) {
-        chat_write_cell(ctx->row + ctx->drawn, ctx->start_col, ctx->width, line, attr);
+        solar_os_tui_write_cell(&chat_app.tui, ctx->row + ctx->drawn, ctx->start_col, ctx->width, line, attr);
         if (emphasis_bytes > 0 && line != NULL) {
             char emphasis[SOLAR_OS_CHAT_USER_MAX];
             const size_t copy_len = emphasis_bytes < sizeof(emphasis) ?
@@ -1210,21 +1188,14 @@ static void chat_draw_tabs(size_t cols)
     static const char channels_label[] = " Channels ";
     static const char chat_label[] = " Chat ";
 
-    chat_write_cell(0, 0, cols, "", SOLAR_OS_TUI_ATTR_NORMAL);
-    solar_os_tui_addstr(
-        &chat_app.tui,
-        0,
-        0,
-        channels_label,
-        chat_app.tab == CHAT_APP_TAB_CHANNELS ?
-            SOLAR_OS_TUI_ATTR_INVERSE : SOLAR_OS_TUI_ATTR_BOLD);
-    solar_os_tui_addstr(
-        &chat_app.tui,
-        0,
-        sizeof(channels_label) - 1U,
-        chat_label,
-        chat_app.tab == CHAT_APP_TAB_CHAT ?
-            SOLAR_OS_TUI_ATTR_INVERSE : SOLAR_OS_TUI_ATTR_BOLD);
+    solar_os_tui_write_cell(&chat_app.tui, 0, 0, cols, "", SOLAR_OS_TUI_ATTR_NORMAL);
+    solar_os_tui_draw_tab(&chat_app.tui, 0, 0,
+                          sizeof(channels_label) - 1U, channels_label,
+                          chat_app.tab == CHAT_APP_TAB_CHANNELS);
+    solar_os_tui_draw_tab(&chat_app.tui, 0,
+                          sizeof(channels_label) - 1U,
+                          sizeof(chat_label) - 1U, chat_label,
+                          chat_app.tab == CHAT_APP_TAB_CHAT);
 }
 
 static void chat_draw_channels(size_t start_row,
@@ -1233,7 +1204,7 @@ static void chat_draw_channels(size_t start_row,
 {
     const uint8_t header_attr = SOLAR_OS_TUI_ATTR_BOLD;
 
-    chat_write_cell(start_row, 0, width, "conversations", header_attr);
+    solar_os_tui_write_cell(&chat_app.tui, start_row, 0, width, "conversations", header_attr);
 
     const size_t row_count =
         chat_build_channel_rows(chat_app.channel_rows,
@@ -1284,7 +1255,7 @@ static void chat_draw_channels(size_t start_row,
             line[0] = '\0';
         }
 
-        chat_write_cell(start_row + row + 1U, 0, width, line, attr);
+        solar_os_tui_write_cell(&chat_app.tui, start_row + row + 1U, 0, width, line, attr);
     }
 }
 
@@ -1310,12 +1281,12 @@ static void chat_draw_messages(size_t start_row,
                  label,
                  chat_provider_state_name(channel->provider));
     }
-    chat_write_cell(start_row, start_col, width, header, header_attr);
+    solar_os_tui_write_cell(&chat_app.tui, start_row, start_col, width, header, header_attr);
 
     const size_t text_rows = body_rows > 1 ? body_rows - 1 : 0;
 
     for (size_t i = 0; i < text_rows; i++) {
-        chat_write_cell(start_row + 1U + i,
+        solar_os_tui_write_cell(&chat_app.tui, start_row + 1U + i,
                         start_col,
                         width,
                         "",
@@ -1363,17 +1334,13 @@ static void chat_draw_input(size_t rows, size_t cols)
 
     const size_t sep_row = rows - CHAT_APP_INPUT_ROWS;
     const size_t input_row = rows - 2U;
-    const size_t help_row = rows - 1U;
-    const uint8_t help_attr = SOLAR_OS_TUI_ATTR_INVERSE;
 
     solar_os_tui_set_cursor_visible(&chat_app.tui, false);
     solar_os_tui_hline(&chat_app.tui, sep_row, 0, cols, 0, SOLAR_OS_TUI_ATTR_NORMAL);
-    chat_write_cell(help_row,
-                    0,
-                    cols,
-                    chat_app.status[0] != '\0' ? chat_app.status :
-                    "TAB channels  ENTER send  /help commands  ESC exits",
-                    help_attr);
+    solar_os_tui_draw_help(
+        &chat_app.tui,
+        chat_app.status[0] != '\0' ? chat_app.status :
+            "TAB channels  ENTER send  /help commands  ESC exits");
 
     const size_t input_width = cols > 2U ? cols - 2U : 0U;
     if (chat_app.input_cursor < chat_app.input_view_offset) {
@@ -1409,12 +1376,10 @@ static void chat_draw_channel_footer(size_t rows, size_t cols)
         return;
     }
     solar_os_tui_set_cursor_visible(&chat_app.tui, false);
-    chat_write_cell(rows - 1U,
-                    0,
-                    cols,
-                    chat_app.status[0] != '\0' ? chat_app.status :
-                    "UP/DOWN select  ENTER join/open  TAB chat  ESC exits",
-                    SOLAR_OS_TUI_ATTR_INVERSE);
+    solar_os_tui_draw_help(
+        &chat_app.tui,
+        chat_app.status[0] != '\0' ? chat_app.status :
+            "UP/DOWN select  ENTER join/open  TAB chat  ESC exits");
 }
 
 static void chat_render(void)
@@ -1424,7 +1389,7 @@ static void chat_render(void)
 
     if (rows < CHAT_APP_MIN_ROWS || cols < CHAT_APP_MIN_COLS) {
         solar_os_tui_clear(&chat_app.tui);
-        chat_write_cell(0, 0, cols, "chat: terminal too small", SOLAR_OS_TUI_ATTR_BOLD);
+        solar_os_tui_draw_too_small(&chat_app.tui, "chat");
         solar_os_tui_refresh(&chat_app.tui);
         return;
     }
@@ -2020,12 +1985,11 @@ static esp_err_t chat_start(solar_os_context_t *ctx)
         chat_app.tab = CHAT_APP_TAB_CHAT;
     }
 
-    const esp_err_t tui_err = solar_os_tui_begin(&chat_app.tui, ctx);
+    const esp_err_t tui_err = solar_os_tui_screen_begin(&chat_app.tui, ctx);
     if (tui_err != ESP_OK) {
         chat_app_free_state();
         return tui_err;
     }
-    (void)solar_os_tui_enable_diff(&chat_app.tui, true);
 
     chat_app.messages = chat_app_calloc(CHAT_APP_MESSAGE_COUNT, sizeof(chat_app_message_t));
     chat_app.history = chat_app_calloc(CHAT_APP_HISTORY_COUNT, sizeof(chat_app.history[0]));

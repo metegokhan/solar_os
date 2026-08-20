@@ -132,8 +132,18 @@ class ScriptBindingDescriptorTest(unittest.TestCase):
         )
         self.assertEqual(
             sum(map(len, entries.values())) + nested_count + hid_keycode_count,
-            434,
+            446,
         )
+
+    def test_shared_tui_helpers_have_python_lua_parity(self):
+        for name in (
+            "layout", "cell", "title", "help", "tab", "list_move",
+            "input_edit", "input",
+        ):
+            entry = f"SOLAR_OS_SCRIPT_API_FUNCTION(tui, {name}, {name});"
+            self.assertIn(entry, DESCRIPTOR)
+            self.assertIn(f"solaros_tui_{name}_obj", PYTHON_BINDINGS)
+            self.assertIn(f"solua_tui_{name}", LUA_BINDINGS)
 
 
 if __name__ == "__main__":
