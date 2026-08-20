@@ -26,6 +26,12 @@ class FlavorPackagesTest(unittest.TestCase):
             self.catalog,
         )
 
+    def test_invaders_disabled_in_all_flavors(self):
+        for flavor_path in sorted((REPOSITORY / "flavors").glob("*.toml")):
+            _, _, groups, packages = self.resolve(flavor_path.stem)
+            self.assertFalse(groups["games"], flavor_path.stem)
+            self.assertFalse(packages["app_invaders"], flavor_path.stem)
+
     def test_granular_group_ownership(self):
         self.assertEqual(
             set(self.catalog.group_defs["maintenance_jobs"].members),
@@ -328,8 +334,8 @@ class FlavorPackagesTest(unittest.TestCase):
             ):
                 self.assertFalse(packages[audio_app], audio_app)
 
-        self.assertTrue(rover_groups["games"])
-        self.assertTrue(rover_packages["app_invaders"])
+        self.assertFalse(rover_groups["games"])
+        self.assertFalse(rover_packages["app_invaders"])
         self.assertFalse(rover_packages["app_python"])
         self.assertFalse(rover_packages["app_lua"])
         self.assertFalse(python_groups["games"])
@@ -356,7 +362,6 @@ class FlavorPackagesTest(unittest.TestCase):
         self.assertEqual(
             python_difference,
             {
-                "app_invaders",
                 "service_playground",
                 "service_script_net",
                 "service_script_runner",
@@ -370,7 +375,6 @@ class FlavorPackagesTest(unittest.TestCase):
         self.assertEqual(
             lua_difference,
             {
-                "app_invaders",
                 "service_playground",
                 "service_script_net",
                 "service_script_runner",
