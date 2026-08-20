@@ -2,6 +2,18 @@
 
 ## 4.x
 
+- **4.8.6** — 2026-08-20 — Corrected italic and bold-italic font generation so
+  glyph overhangs no longer lose their top-right corners at any supported text
+  size. `Ctrl+V` now pastes the shared SolarOS clipboard into shell input without
+  executing pasted text. Chat now uses separate Channels and Chat tabs; selecting
+  a known gateway room joins it automatically before opening the conversation.
+  Notes keeps the selection on the next active item after completing one, has a
+  persistent help bar, can tidy all completed items, moves whole categories with
+  shifted arrows, and retains its cursor while adding or editing an item. Added
+  shared TUI screen layout, title, tab, help, UTF-8 input, cell, and list-navigation
+  helpers across native applications and configuration TUIs, with corresponding
+  high-level Python and Lua APIs. The display terminal now uses its final complete
+  text row and leaves any remaining vertical space below it.
 - **4.8.5** — 2026-08-20 — Added suspend mode: the primary display turns off,
   the effective power profile becomes `lowpower`, and background jobs, radios,
   Inbox handling, and audio continue. A second KEY short press resumes the

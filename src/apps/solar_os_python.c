@@ -121,6 +121,7 @@
 #include "solar_os_task.h"
 #include "solar_os_time.h"
 #include "solar_os_tui.h"
+#include "solar_os_tui_widgets.h"
 #if SOLAR_OS_PACKAGE_SERVICE_UART
 #include "solar_os_uart.h"
 #endif
@@ -167,6 +168,11 @@ typedef enum {
     PYTHON_EVENT_TUI_VRULE,
     PYTHON_EVENT_TUI_BOX,
     PYTHON_EVENT_TUI_FILL,
+    PYTHON_EVENT_TUI_CELL,
+    PYTHON_EVENT_TUI_TITLE,
+    PYTHON_EVENT_TUI_HELP,
+    PYTHON_EVENT_TUI_TAB,
+    PYTHON_EVENT_TUI_INPUT,
     PYTHON_EVENT_GFX_BEGIN,
     PYTHON_EVENT_GFX_END,
     PYTHON_EVENT_GFX_CLEAR,
@@ -5462,6 +5468,173 @@ static mp_obj_t solaros_tui_fill(size_t n_args, const mp_obj_t *args)
 }
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_tui_fill_obj, 4, 6, solaros_tui_fill);
 
+static void python_tui_text_event(python_event_type_t type,
+                                  uint16_t row,
+                                  uint16_t col,
+                                  uint16_t width,
+                                  const char *first,
+                                  size_t first_len,
+                                  const char *second,
+                                  size_t second_len,
+                                  uint8_t attr,
+                                  bool selected,
+                                  int32_t cursor,
+                                  int32_t view)
+{
+    if (first_len + (second != NULL ? second_len + 1U : 0U) >= PYTHON_EVENT_DATA_MAX) {
+        mp_raise_ValueError(MP_ERROR_TEXT("tui text too long"));
+    }
+    python_event_t event = {
+        .type = type, .row = row, .col = col, .width = width,
+        .attr = attr, .success = selected, .x0 = cursor, .x1 = view,
+        .data_len = first_len,
+    };
+    memcpy(event.data, first, first_len);
+    event.data[first_len] = '\0';
+    if (second != NULL) {
+        memcpy(event.data + first_len + 1U, second, second_len);
+        event.data[first_len + 1U + second_len] = '\0';
+    }
+    python_tui_send_event(&event);
+}
+
+static mp_obj_t python_tui_rect_obj(const solar_os_tui_rect_t *rect)
+{
+    mp_obj_t values[4] = {
+        mp_obj_new_int_from_uint(rect->row), mp_obj_new_int_from_uint(rect->col),
+        mp_obj_new_int_from_uint(rect->height), mp_obj_new_int_from_uint(rect->width),
+    };
+    return mp_obj_new_tuple(4, values);
+}
+
+static mp_obj_t solaros_tui_layout(size_t n_args, const mp_obj_t *args)
+{
+    const size_t tabs = python_optional_u32(n_args, args, 0, 0);
+    const size_t status = python_optional_u32(n_args, args, 1, 0);
+    const size_t input = python_optional_u32(n_args, args, 2, 0);
+    solar_os_shell_io_t *io = python_current_io();
+    solar_os_tui_screen_layout_t layout;
+    if (io == NULL || !solar_os_tui_layout_compute(solar_os_shell_io_rows(io),
+                                                    solar_os_shell_io_cols(io),
+                                                    tabs, status, input, &layout)) {
+        return mp_const_none;
+    }
+    mp_obj_t values[6] = {
+        python_tui_rect_obj(&layout.title), python_tui_rect_obj(&layout.tabs),
+        python_tui_rect_obj(&layout.body), python_tui_rect_obj(&layout.status),
+        python_tui_rect_obj(&layout.input), python_tui_rect_obj(&layout.help),
+    };
+    return mp_obj_new_tuple(6, values);
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_tui_layout_obj, 0, 3, solaros_tui_layout);
+
+static mp_obj_t solaros_tui_cell(size_t n_args, const mp_obj_t *args)
+{
+    size_t len = 0;
+    const char *text = mp_obj_str_get_data(args[3], &len);
+    python_tui_text_event(PYTHON_EVENT_TUI_CELL,
+                          python_u16_from_size(python_size_from_obj(args[0])),
+                          python_u16_from_size(python_size_from_obj(args[1])),
+                          python_u16_from_size(python_size_from_obj(args[2])),
+                          text, len, NULL, 0,
+                          python_optional_tui_attr(n_args, args, 4), false, 0, 0);
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_tui_cell_obj, 4, 5, solaros_tui_cell);
+
+static mp_obj_t solaros_tui_title(size_t n_args, const mp_obj_t *args)
+{
+    size_t title_len = 0, detail_len = 0;
+    const char *title = mp_obj_str_get_data(args[0], &title_len);
+    const char *detail = n_args > 1 ? mp_obj_str_get_data(args[1], &detail_len) : "";
+    python_tui_text_event(PYTHON_EVENT_TUI_TITLE, 0, 0, 0, title, title_len,
+                          detail, detail_len, 0, false, 0, 0);
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_tui_title_obj, 1, 2, solaros_tui_title);
+
+static mp_obj_t solaros_tui_help(mp_obj_t text_obj)
+{
+    size_t len = 0;
+    const char *text = mp_obj_str_get_data(text_obj, &len);
+    python_tui_text_event(PYTHON_EVENT_TUI_HELP, 0, 0, 0, text, len,
+                          NULL, 0, 0, false, 0, 0);
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_1(solaros_tui_help_obj, solaros_tui_help);
+
+static mp_obj_t solaros_tui_tab(size_t n_args, const mp_obj_t *args)
+{
+    (void)n_args;
+    size_t len = 0;
+    const char *text = mp_obj_str_get_data(args[3], &len);
+    python_tui_text_event(PYTHON_EVENT_TUI_TAB,
+                          python_u16_from_size(python_size_from_obj(args[0])),
+                          python_u16_from_size(python_size_from_obj(args[1])),
+                          python_u16_from_size(python_size_from_obj(args[2])),
+                          text, len, NULL, 0, 0, mp_obj_is_true(args[4]), 0, 0);
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_tui_tab_obj, 5, 5, solaros_tui_tab);
+
+static mp_obj_t solaros_tui_list_move(size_t n_args, const mp_obj_t *args)
+{
+    solar_os_tui_viewport_t viewport = {
+        .cursor = python_size_from_obj(args[0]), .top = python_size_from_obj(args[1]),
+    };
+    const bool moved = solar_os_tui_viewport_key(&viewport, python_u8_from_obj(args[4]),
+        python_size_from_obj(args[2]), python_size_from_obj(args[3]),
+        n_args > 5 && mp_obj_is_true(args[5]));
+    mp_obj_t values[3] = {
+        mp_obj_new_int_from_uint(viewport.cursor), mp_obj_new_int_from_uint(viewport.top),
+        mp_obj_new_bool(moved),
+    };
+    return mp_obj_new_tuple(3, values);
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_tui_list_move_obj, 5, 6, solaros_tui_list_move);
+
+static mp_obj_t solaros_tui_input_edit(size_t n_args, const mp_obj_t *args)
+{
+    (void)n_args;
+    size_t len = 0;
+    const char *source = mp_obj_str_get_data(args[0], &len);
+    size_t capacity = python_size_from_obj(args[5]);
+    if (capacity > PYTHON_EVENT_DATA_MAX) capacity = PYTHON_EVENT_DATA_MAX;
+    if (capacity < len + 1U) capacity = len + 1U;
+    if (capacity > PYTHON_EVENT_DATA_MAX) mp_raise_ValueError(MP_ERROR_TEXT("input too long"));
+    char text[PYTHON_EVENT_DATA_MAX];
+    memcpy(text, source, len);
+    text[len] = '\0';
+    solar_os_tui_input_state_t state = {
+        .cursor = python_size_from_obj(args[1]), .view = python_size_from_obj(args[2]),
+    };
+    const solar_os_tui_input_action_t action = solar_os_tui_input_key(
+        text, capacity, &state, python_u32_from_obj(args[3]), python_size_from_obj(args[4]));
+    mp_obj_t values[4] = {
+        mp_obj_new_str_from_cstr(text), mp_obj_new_int_from_uint(state.cursor),
+        mp_obj_new_int_from_uint(state.view), mp_obj_new_int(action),
+    };
+    return mp_obj_new_tuple(4, values);
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_tui_input_edit_obj, 6, 6, solaros_tui_input_edit);
+
+static mp_obj_t solaros_tui_input(size_t n_args, const mp_obj_t *args)
+{
+    size_t label_len = 0, text_len = 0;
+    const char *label = mp_obj_str_get_data(args[3], &label_len);
+    const char *text = mp_obj_str_get_data(args[4], &text_len);
+    python_tui_text_event(PYTHON_EVENT_TUI_INPUT,
+                          python_u16_from_size(python_size_from_obj(args[0])),
+                          python_u16_from_size(python_size_from_obj(args[1])),
+                          python_u16_from_size(python_size_from_obj(args[2])),
+                          label, label_len, text, text_len,
+                          python_optional_tui_attr(n_args, args, 7), false,
+                          (int32_t)python_size_from_obj(args[5]),
+                          (int32_t)python_size_from_obj(args[6]));
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_tui_input_obj, 7, 8, solaros_tui_input);
+
 static mp_obj_t solaros_tui_getch(size_t n_args, const mp_obj_t *args)
 {
     const uint32_t timeout_ms = python_optional_u32(n_args, args, 0, 0);
@@ -6715,6 +6888,33 @@ static void python_apply_tui_event(solar_os_context_t *ctx, const python_event_t
                           event->codepoint,
                           event->attr);
         break;
+    case PYTHON_EVENT_TUI_CELL:
+        solar_os_tui_write_cell(&tui, event->row, event->col, event->width,
+                                event->data, event->attr);
+        break;
+    case PYTHON_EVENT_TUI_TITLE:
+        solar_os_tui_draw_title(&tui, event->data,
+                                event->data_len + 1U < sizeof(event->data) ?
+                                    event->data + event->data_len + 1U : "");
+        break;
+    case PYTHON_EVENT_TUI_HELP:
+        solar_os_tui_draw_help(&tui, event->data);
+        break;
+    case PYTHON_EVENT_TUI_TAB:
+        solar_os_tui_draw_tab(&tui, event->row, event->col, event->width,
+                              event->data, event->success);
+        break;
+    case PYTHON_EVENT_TUI_INPUT: {
+        solar_os_tui_input_state_t state = {
+            .cursor = event->x0 >= 0 ? (size_t)event->x0 : 0,
+            .view = event->x1 >= 0 ? (size_t)event->x1 : 0,
+        };
+        const char *text = event->data_len + 1U < sizeof(event->data) ?
+            event->data + event->data_len + 1U : "";
+        solar_os_tui_draw_input(&tui, event->row, event->col, event->width,
+                                event->data, text, &state, event->attr);
+        break;
+    }
     default:
         break;
     }
@@ -6846,8 +7046,14 @@ static void python_drain_events(solar_os_context_t *ctx)
         case PYTHON_EVENT_TUI_PUTCH:
         case PYTHON_EVENT_TUI_HLINE:
         case PYTHON_EVENT_TUI_VLINE:
+        case PYTHON_EVENT_TUI_VRULE:
         case PYTHON_EVENT_TUI_BOX:
         case PYTHON_EVENT_TUI_FILL:
+        case PYTHON_EVENT_TUI_CELL:
+        case PYTHON_EVENT_TUI_TITLE:
+        case PYTHON_EVENT_TUI_HELP:
+        case PYTHON_EVENT_TUI_TAB:
+        case PYTHON_EVENT_TUI_INPUT:
             python_apply_tui_event(ctx, &event);
             break;
         case PYTHON_EVENT_GFX_BEGIN:

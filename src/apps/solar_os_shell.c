@@ -4,6 +4,7 @@
 #include "solar_os_shell_common.h"
 #include "solar_os_shell_io.h"
 #include "solar_os_shell_launch.h"
+#include "solar_os_shell_line.h"
 
 #include <ctype.h>
 #include <dirent.h>
@@ -28,6 +29,7 @@
 #include "solar_os_agent.h"
 #endif
 #include "solar_os_board_caps.h"
+#include "solar_os_clipboard.h"
 #if SOLAR_OS_PACKAGE_SERVICE_RESOURCES
 #include "solar_os_buses.h"
 #endif
@@ -3404,6 +3406,42 @@ static void shell_insert_char(solar_os_context_t *ctx, char ch)
             (void)solar_os_shell_io_put_char(shell_io(ctx), ch);
             return;
         }
+    }
+    shell_render_input(ctx);
+}
+
+static void shell_paste_clipboard(solar_os_context_t *ctx)
+{
+    size_t clipboard_len = 0;
+    const char *clipboard = solar_os_clipboard_data(&clipboard_len);
+    if (clipboard == NULL || clipboard_len == 0) {
+        return;
+    }
+
+    const bool can_redraw = shell_can_redraw_input(ctx);
+    if (!can_redraw && shell_session(ctx)->input_cursor != shell_session(ctx)->input_len) {
+        return;
+    }
+
+    const size_t paste_start = shell_session(ctx)->input_cursor;
+    const size_t inserted = solar_os_shell_line_paste(
+        shell_session(ctx)->input,
+        sizeof(shell_session(ctx)->input),
+        &shell_session(ctx)->input_len,
+        &shell_session(ctx)->input_cursor,
+        clipboard,
+        clipboard_len);
+    if (inserted == 0) {
+        return;
+    }
+
+    shell_session(ctx)->history_browsing = false;
+    shell_session(ctx)->history_index = -1;
+    if (!can_redraw) {
+        (void)solar_os_shell_io_write_len(shell_io(ctx),
+                                          &shell_session(ctx)->input[paste_start],
+                                          inserted);
+        return;
     }
     shell_render_input(ctx);
 }
@@ -8351,6 +8389,9 @@ static void shell_handle_char(solar_os_context_t *ctx, char ch)
         break;
     case '\t':
         shell_complete_command(ctx, repeated_tab);
+        break;
+    case 0x16U:
+        shell_paste_clipboard(ctx);
         break;
     default:
         if (shell_is_printable_char(ch) &&

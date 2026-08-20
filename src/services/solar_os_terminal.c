@@ -10,10 +10,10 @@
 #include "solar_os_fonts.h"
 #include "solar_os_log.h"
 #include "solar_os_memory.h"
+#include "solar_os_terminal_geometry.h"
 #include "nvs.h"
 
 #define TERM_MARGIN_X 4
-#define TERM_MARGIN_Y 3
 #define TERM_STATUS_BAR_HEIGHT 16
 #define TERM_STATUS_BAR_COMPACT_MAX_WIDTH 160
 #define TERM_STATUS_BAR_ICON_GAP 4
@@ -565,23 +565,35 @@ static void terminal_apply_settings(solar_os_terminal_t *terminal, bool clear_sc
     }
     char_width *= text_scale;
 
-    int regular_height = u8g2_GetMaxCharHeight(u8g2);
-    if (regular_height <= 0) {
-        regular_height = u8g2_GetAscent(u8g2) - u8g2_GetDescent(u8g2);
+    int cell_ascent = 0;
+    int cell_descent = 0;
+    for (unsigned style = 0; style < 4U; style++) {
+        u8g2_SetFont(u8g2,
+                     terminal_selected_font(terminal,
+                                            (style & 1U) != 0,
+                                            (style & 2U) != 0));
+        int height = u8g2_GetMaxCharHeight(u8g2);
+        int descent = -(int)u8g2->font_info.y_offset;
+        if (height <= 0) {
+            const int reference_descent = u8g2_GetDescent(u8g2);
+            descent = reference_descent < 0 ? -reference_descent : reference_descent;
+            height = u8g2_GetAscent(u8g2) + descent;
+        }
+        if (descent < 0) descent = 0;
+        if (descent > height) descent = height;
+        const int ascent = height - descent;
+        if (ascent > cell_ascent) cell_ascent = ascent;
+        if (descent > cell_descent) cell_descent = descent;
     }
-
-    u8g2_SetFont(u8g2, terminal_selected_font(terminal, true, false));
-    int bold_height = u8g2_GetMaxCharHeight(u8g2);
-    if (bold_height <= 0) {
-        bold_height = u8g2_GetAscent(u8g2) - u8g2_GetDescent(u8g2);
-    }
-
     u8g2_SetFont(u8g2, terminal_selected_font(terminal, false, false));
-    int line_height = (regular_height > bold_height ? regular_height : bold_height) + 1;
+    if (cell_ascent <= 0) cell_ascent = 12;
+    if (cell_descent < 0) cell_descent = 0;
+    int line_height = (cell_ascent + cell_descent) * text_scale;
+    cell_ascent *= text_scale;
     if (line_height <= 1) {
         line_height = 14;
+        cell_ascent = 12;
     }
-    line_height *= text_scale;
 
     const int display_width = u8g2_GetDisplayWidth(u8g2);
     const int display_height = u8g2_GetDisplayHeight(u8g2);
@@ -590,17 +602,7 @@ static void terminal_apply_settings(solar_os_terminal_t *terminal, bool clear_sc
         status_bar_height = display_height / 3;
     }
 
-    int baseline_offset =
-        status_bar_height + TERM_MARGIN_Y + (u8g2_GetAscent(u8g2) * text_scale);
-    if (baseline_offset <= status_bar_height + TERM_MARGIN_Y) {
-        baseline_offset = status_bar_height + TERM_MARGIN_Y + line_height - 1;
-    }
-
-    int text_bottom = display_height - TERM_MARGIN_Y -
-        (terminal->footer_enabled ? line_height : 0);
-    if (text_bottom < baseline_offset) {
-        text_bottom = baseline_offset;
-    }
+    const int footer_height = terminal->footer_enabled ? line_height : 0;
 
     size_t cols = (size_t)((display_width - (TERM_MARGIN_X * 2)) / char_width);
     if (cols < 1) {
@@ -609,17 +611,25 @@ static void terminal_apply_settings(solar_os_terminal_t *terminal, bool clear_sc
         cols = SOLAR_OS_TERMINAL_MAX_COLS;
     }
 
-    size_t rows = (size_t)((text_bottom - baseline_offset) / line_height) + 1;
-    if (rows < 1) {
-        rows = 1;
-    } else if (rows > SOLAR_OS_TERMINAL_MAX_ROWS) {
-        rows = SOLAR_OS_TERMINAL_MAX_ROWS;
+    solar_os_terminal_geometry_t geometry;
+    if (!solar_os_terminal_geometry_compute(display_height,
+                                             status_bar_height,
+                                             footer_height,
+                                             line_height,
+                                             cell_ascent,
+                                             SOLAR_OS_TERMINAL_MAX_ROWS,
+                                             &geometry)) {
+        geometry.rows = 1;
+        geometry.baseline_offset = status_bar_height + cell_ascent;
     }
+    const size_t rows = geometry.rows;
+    const int baseline_offset = geometry.baseline_offset;
 
     terminal->cols = cols;
     terminal->rows = rows;
     terminal->char_width = (uint8_t)char_width;
     terminal->line_height = (uint8_t)line_height;
+    terminal->cell_ascent = (uint8_t)cell_ascent;
     terminal->baseline_offset = (uint8_t)baseline_offset;
     terminal->status_bar_height = (uint8_t)status_bar_height;
 
@@ -912,6 +922,7 @@ void solar_os_terminal_init(solar_os_terminal_t *terminal, u8g2_t *u8g2)
     terminal->rows = 20;
     terminal->char_width = 7;
     terminal->line_height = 14;
+    terminal->cell_ascent = 12;
     terminal->baseline_offset = 13;
     terminal->status_bar_height = TERM_STATUS_BAR_HEIGHT;
     terminal->status_bar_visible = true;
@@ -2037,7 +2048,7 @@ static void terminal_draw_cell(solar_os_terminal_t *terminal,
                                bool inverse)
 {
     if (inverse) {
-        int top_y = y - terminal->line_height + 2;
+        int top_y = y - terminal->cell_ascent;
         int height = terminal->line_height;
         if (top_y < 0) {
             height += top_y;
@@ -2111,7 +2122,7 @@ static void terminal_draw_line(solar_os_terminal_t *terminal,
 static int terminal_cell_top_y(const solar_os_terminal_t *terminal, size_t row)
 {
     return (int)terminal->baseline_offset + (int)(row * terminal->line_height) -
-        (int)terminal->line_height + 2;
+        (int)terminal->cell_ascent;
 }
 
 static void terminal_draw_vrules(solar_os_terminal_t *terminal, u8g2_t *u8g2)
@@ -2644,7 +2655,7 @@ static void terminal_draw_footer(solar_os_terminal_t *terminal,
     const int display_width = u8g2_GetDisplayWidth(u8g2);
     const int display_height = u8g2_GetDisplayHeight(u8g2);
     const int top = display_height - terminal->line_height;
-    const int baseline = display_height - 2;
+    const int baseline = top + terminal->cell_ascent;
     terminal_set_draw_color(terminal, u8g2, 0);
     u8g2_DrawBox(u8g2,
                  0,
