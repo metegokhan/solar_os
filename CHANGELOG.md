@@ -2,6 +2,16 @@
 
 ## 4.x
 
+- **4.8.5** — 2026-08-20 — Added suspend mode: the primary display turns off,
+  the effective power profile becomes `lowpower`, and background jobs, radios,
+  Inbox handling, and audio continue. A second KEY short press resumes the
+  display and restores the selected profile. Added persistent
+  `setterm powerkey sleep|suspend` configuration and matching Setterm TUI,
+  commands, completion, and diagnostics. New or cleared configurations now
+  default to the `performance` profile, suspend as the KEY action, and Inbox
+  notification sound enabled on audio-capable boards. New terminals default to
+  the `compact` font and text size `16`; existing saved display preferences are
+  preserved.
 - **4.8.4** — 2026-08-20 — MicroPython embed generation is pinned and
   reproducible, including the SolarOS qstr and port overrides. Python now uses
   the port-compatible `EXTRA` language profile, with f-strings, sets,

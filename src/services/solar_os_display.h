@@ -83,6 +83,9 @@ esp_err_t solar_os_display_release(const char *name, const char *owner);
 bool solar_os_display_brightness_supported(void);
 esp_err_t solar_os_display_get_brightness(uint8_t *percent);
 esp_err_t solar_os_display_set_brightness(uint8_t percent);
+esp_err_t solar_os_display_suspend_primary(void);
+esp_err_t solar_os_display_resume_primary(void);
+bool solar_os_display_primary_suspended(void);
 esp_err_t solar_os_display_set_palette_inverted(const char *name, bool inverted);
 esp_err_t solar_os_display_get_controller_mode(const char *name,
                                                const char **mode,

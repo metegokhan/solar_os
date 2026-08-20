@@ -87,6 +87,7 @@ This is the canonical documentation used by GitHub, the generated solar-os.eu we
 - [setterm command](commands.md) — Configure terminal/input preferences. Without arguments, opens the display TUI when available.
 - [sh command](commands.md) — Run a simple SolarOS shell script from storage.
 - [sleep command](commands.md) — Enter explicit light sleep.
+- [suspend command](commands.md) — Keep services running in low power with the display off.
 - [spi command](commands.md) — Show every named SPI bus, or one selected bus.
 - [sshkey command](commands.md) — Show default SSH key status.
 - [status command](commands.md) — Print a compact system status summary.

@@ -23,6 +23,8 @@
 #define TERM_NVS_TEXT_SIZE_KEY "textsize"
 #define TERM_NVS_PALETTE_KEY "palette"
 #define TERM_NVS_STATUS_BAR_KEY "statusbar"
+#define TERM_DEFAULT_FONT SOLAR_OS_TERMINAL_FONT_COMPACT
+#define TERM_DEFAULT_TEXT_SIZE SOLAR_OS_TERMINAL_TEXT_SIZE_16
 
 #ifndef SOLAR_OS_BOARD_DISPLAY_DEFAULT_ORIENTATION
 #define SOLAR_OS_BOARD_DISPLAY_DEFAULT_ORIENTATION 0
@@ -308,8 +310,8 @@ static const uint8_t *terminal_selected_font(const solar_os_terminal_t *terminal
                                              bool bold,
                                              bool italic)
 {
-    solar_os_terminal_font_t font = SOLAR_OS_TERMINAL_FONT_MONO;
-    solar_os_terminal_text_size_t text_size = SOLAR_OS_TERMINAL_TEXT_SIZE_14;
+    solar_os_terminal_font_t font = TERM_DEFAULT_FONT;
+    solar_os_terminal_text_size_t text_size = TERM_DEFAULT_TEXT_SIZE;
 
     if (terminal != NULL) {
         font = terminal->font;
@@ -317,11 +319,11 @@ static const uint8_t *terminal_selected_font(const solar_os_terminal_t *terminal
     }
 
     if ((size_t)font >= sizeof(terminal_font_families) / sizeof(terminal_font_families[0])) {
-        font = SOLAR_OS_TERMINAL_FONT_MONO;
+        font = TERM_DEFAULT_FONT;
     }
     if ((size_t)text_size >= sizeof(terminal_text_sizes) / sizeof(terminal_text_sizes[0]) ||
         terminal_text_sizes[text_size].name == NULL) {
-        text_size = SOLAR_OS_TERMINAL_TEXT_SIZE_14;
+        text_size = TERM_DEFAULT_TEXT_SIZE;
     }
 
     const terminal_text_size_profile_t *profile = &terminal_text_sizes[text_size];
@@ -553,7 +555,7 @@ static void terminal_apply_settings(solar_os_terminal_t *terminal, bool clear_sc
     const terminal_text_size_profile_t *profile =
         terminal_text_size_is_valid(terminal->text_size) ?
         &terminal_text_sizes[terminal->text_size] :
-        &terminal_text_sizes[SOLAR_OS_TERMINAL_TEXT_SIZE_14];
+        &terminal_text_sizes[TERM_DEFAULT_TEXT_SIZE];
     if ((size_t)terminal->font < sizeof(profile->cell_width) / sizeof(profile->cell_width[0]) &&
         profile->cell_width[terminal->font] > 0) {
         char_width = profile->cell_width[terminal->font];
@@ -904,8 +906,8 @@ void solar_os_terminal_init(solar_os_terminal_t *terminal, u8g2_t *u8g2)
     terminal_alloc_scrollback(terminal);
     terminal->u8g2 = u8g2;
     terminal->orientation_degrees = SOLAR_OS_BOARD_DISPLAY_DEFAULT_ORIENTATION;
-    terminal->font = SOLAR_OS_TERMINAL_FONT_MONO;
-    terminal->text_size = SOLAR_OS_TERMINAL_TEXT_SIZE_14;
+    terminal->font = TERM_DEFAULT_FONT;
+    terminal->text_size = TERM_DEFAULT_TEXT_SIZE;
     terminal->cols = 65;
     terminal->rows = 20;
     terminal->char_width = 7;
@@ -1684,7 +1686,7 @@ esp_err_t solar_os_terminal_set_orientation_transient(solar_os_terminal_t *termi
 
 solar_os_terminal_font_t solar_os_terminal_font(const solar_os_terminal_t *terminal)
 {
-    return terminal != NULL ? terminal->font : SOLAR_OS_TERMINAL_FONT_MONO;
+    return terminal != NULL ? terminal->font : TERM_DEFAULT_FONT;
 }
 
 esp_err_t solar_os_terminal_set_font(solar_os_terminal_t *terminal, solar_os_terminal_font_t font)
@@ -1745,7 +1747,7 @@ bool solar_os_terminal_parse_font(const char *name, solar_os_terminal_font_t *fo
 
 solar_os_terminal_text_size_t solar_os_terminal_text_size(const solar_os_terminal_t *terminal)
 {
-    return terminal != NULL ? terminal->text_size : SOLAR_OS_TERMINAL_TEXT_SIZE_14;
+    return terminal != NULL ? terminal->text_size : TERM_DEFAULT_TEXT_SIZE;
 }
 
 esp_err_t solar_os_terminal_set_text_size(solar_os_terminal_t *terminal,
