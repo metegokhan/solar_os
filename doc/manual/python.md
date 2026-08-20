@@ -960,6 +960,62 @@ print(solaros.identity.format())
 ## `solaros.net`
 
 - `ping(host[, count[, timeout_ms[, interval_ms[, data_size]]]])`: ping a host and return transmit/receive statistics.
+- `tcp_connect(host, port[, timeout_ms])`: open an IPv4 TCP client and return a managed handle.
+- `tcp_send(handle, data[, timeout_ms])`: send the complete binary buffer.
+- `tcp_receive(handle[, max_bytes[, timeout_ms]])`: receive bytes, `None` on timeout, or `b""` when the peer closes.
+- `udp_open([local_port])`: open an IPv4 UDP endpoint; zero or an omitted port selects an ephemeral local port.
+- `udp_send(handle, host, port, data[, timeout_ms])`: send one complete datagram.
+- `udp_receive(handle[, max_bytes[, timeout_ms]])`: receive one datagram dictionary or `None` on timeout.
+- `websocket_connect(url[, subprotocol[, timeout_ms]])`: connect to a `ws://` or certificate-validated `wss://` URL and return a managed handle.
+- `websocket_send(handle, data[, text[, timeout_ms]])`: send one final binary frame, or one final text frame when `text` is true.
+- `websocket_receive(handle[, max_bytes[, timeout_ms]])`: receive one frame dictionary or `None` on timeout.
+- `close(handle)`: close one managed handle.
+- `close_all()`: close every handle owned by this interpreter run.
+- `limits()`: return current ownership, usage, limits, and blocking-policy fields.
+
+The TCP, UDP, and WebSocket calls are synchronous. They do not start a worker
+or invoke callbacks. The connect default is 10000 ms, the send and receive
+default is 1000 ms, and each call accepts a timeout from 0 through 60000 ms.
+A receive timeout is a normal `None` result. Connect, send, cancellation, DNS,
+TLS, protocol, and other transport failures raise `OSError`.
+
+Handles belong only to the current Python app or runner invocation. They cannot
+be shared with Lua, another Python invocation, or a background job. Handles are
+generation checked, so a closed handle does not become valid when its slot is
+reused. Normal exit, an exception, cancellation, and forced interpreter cleanup
+close all remaining handles before the VM is destroyed. Explicit `close()` in a
+`finally` block is still recommended when the script continues after an error.
+
+One interpreter run can hold four TCP, UDP, and WebSocket handles in total.
+SolarOS allows eight of these script handles globally. A send, receive buffer,
+or WebSocket frame is limited to 65536 bytes; one UDP datagram is limited to
+65507 bytes. `limits()` reports these constants and the current per-run and
+global handle counts. Opening past a limit raises an allocation-style
+`OSError` without evicting another owner.
+
+TCP and UDP socket waits check cancellation in slices of at most 50 ms. DNS
+resolution is a platform call and checks cancellation before and after it.
+WebSocket DNS, TCP/TLS setup, upgrade, and frame I/O use the supplied bounded
+transport deadline and check cancellation before and after each transport
+stage; cancellation can therefore take up to that stage's timeout. TCP and UDP
+use one end-to-end deadline per public operation, including DNS where SolarOS
+controls it. A WebSocket public call can contain multiple transport stages;
+each stage is separately bounded by the supplied timeout. Receive polling,
+reading, and draining share the remaining public-call deadline at the SolarOS
+layer.
+
+UDP receive dictionaries contain `data`, `address`, `port`, `truncated`, and
+`datagram_bytes`. WebSocket receive dictionaries contain `data`, `type`,
+`final`, `closed`, `truncated`, and `frame_bytes`. When a datagram or frame is
+larger than `max_bytes`, its retained prefix is returned with `truncated=True`;
+the rest of that message is discarded so the next receive starts at the next
+message. WebSocket types are `continuation`, `text`, `binary`, `close`, `ping`,
+`pong`, or `unknown`.
+
+These APIs are clients only. They do not expose TCP listen/accept, UDP
+multicast, custom WebSocket headers, custom certificate stores, or a raw socket
+object. WebSocket URLs support DNS names or IPv4 hosts, optional ports, paths,
+and query strings; URL credentials, fragments, and IPv6 literals are rejected.
 
 Example:
 
@@ -967,6 +1023,15 @@ Example:
 import solaros
 
 print(solaros.net.ping("example-host", 4))
+
+handle = solaros.net.websocket_connect("wss://example.com/events")
+try:
+    solaros.net.websocket_send(handle, b'{"ready":true}', True)
+    frame = solaros.net.websocket_receive(handle, 4096, 5000)
+    if frame is not None:
+        print(frame["type"], frame["data"])
+finally:
+    solaros.net.close(handle)
 ```
 
 ## `solaros.ssh_keys`

@@ -81,6 +81,7 @@
 #endif
 #if SOLAR_OS_PACKAGE_SERVICE_NET
 #include "solar_os_net.h"
+#include "solar_os_net_session.h"
 #endif
 #if SOLAR_OS_PACKAGE_SERVICE_SSH
 #include "solar_os_ssh_keys.h"
@@ -251,6 +252,9 @@ SOLAR_OS_APP_STATIC_SRAM_EXCEPTION("shared shell and Playground Lua runtime")
 static solua_runtime_owner_t solua_runtime_owner;
 SOLAR_OS_APP_STATIC_SRAM_EXCEPTION("shared shell and Playground Lua cadence")
 static uint32_t solua_tick_interval_ms;
+#if SOLAR_OS_PACKAGE_SERVICE_NET
+static solar_os_net_session_t *solua_net_session;
+#endif
 
 static bool solua_runtime_claim(solua_runtime_owner_t owner)
 {
@@ -978,6 +982,68 @@ static bool solua_should_cancel(void *user)
         (solua_runner_control != NULL &&
          solar_os_script_run_should_cancel(solua_runner_control));
 }
+
+#if SOLAR_OS_PACKAGE_SERVICE_NET
+static solar_os_net_session_t *solua_net_get(lua_State *L)
+{
+    if (solua_net_session == NULL) {
+        const char *owner = solua_runner_control != NULL ? "lua.runner" : "lua.app";
+        (void)solua_check_esp(L,
+                              solar_os_net_session_create(owner,
+                                                          solua_should_cancel,
+                                                          NULL,
+                                                          &solua_net_session));
+    }
+    return solua_net_session;
+}
+
+static void solua_net_destroy(void)
+{
+    solar_os_net_session_destroy(solua_net_session);
+    solua_net_session = NULL;
+}
+
+static uint16_t solua_net_port(lua_State *L, int index, bool allow_zero)
+{
+    const lua_Integer value = luaL_checkinteger(L, index);
+    if (value < (allow_zero ? 0 : 1) || value > UINT16_MAX) {
+        luaL_error(L, allow_zero ? "expected port 0..65535" :
+                                  "expected port 1..65535");
+    }
+    return (uint16_t)value;
+}
+
+static uint32_t solua_net_timeout(lua_State *L, int index, uint32_t fallback)
+{
+    const lua_Integer value = lua_isnoneornil(L, index) ? fallback :
+        luaL_checkinteger(L, index);
+    if (value < 0 || value > SOLAR_OS_NET_MAX_TIMEOUT_MS) {
+        luaL_error(L, "timeout out of range");
+    }
+    return (uint32_t)value;
+}
+
+static size_t solua_net_receive_size(lua_State *L, int index)
+{
+    const lua_Integer value = lua_isnoneornil(L, index) ? 4096 :
+        luaL_checkinteger(L, index);
+    if (value <= 0 || value > SOLAR_OS_NET_MAX_TRANSFER_BYTES) {
+        luaL_error(L, "receive size out of range");
+    }
+    return (size_t)value;
+}
+
+static uint8_t *solua_net_buffer(lua_State *L, size_t size)
+{
+    uint8_t *buffer = solar_os_memory_alloc(size,
+                                            SOLAR_OS_MEMORY_EXTERNAL_REQUIRED,
+                                            "lua.net");
+    if (buffer == NULL) {
+        (void)solua_check_esp(L, ESP_ERR_NO_MEM);
+    }
+    return buffer;
+}
+#endif
 
 static int solua_solaros_write(lua_State *L)
 {
@@ -4053,6 +4119,230 @@ static int solua_net_ping(lua_State *L)
     return 1;
 }
 
+static int solua_net_tcp_connect(lua_State *L)
+{
+    uint32_t handle = 0;
+    (void)solua_check_esp(
+        L,
+        solar_os_net_session_tcp_connect(
+            solua_net_get(L),
+            luaL_checkstring(L, 1),
+            solua_net_port(L, 2, false),
+            solua_net_timeout(L, 3, SOLAR_OS_NET_DEFAULT_CONNECT_TIMEOUT_MS),
+            &handle));
+    lua_pushinteger(L, handle);
+    return 1;
+}
+
+static int solua_net_tcp_send(lua_State *L)
+{
+    size_t data_len = 0;
+    const char *data = luaL_checklstring(L, 2, &data_len);
+    return solua_check_esp(
+        L,
+        solar_os_net_session_tcp_send(
+            solua_net_get(L),
+            solua_check_u32(L, 1),
+            data,
+            data_len,
+            solua_net_timeout(L, 3, SOLAR_OS_NET_DEFAULT_IO_TIMEOUT_MS)));
+}
+
+static int solua_net_tcp_receive(lua_State *L)
+{
+    const size_t max_bytes = solua_net_receive_size(L, 2);
+    const uint32_t handle = solua_check_u32(L, 1);
+    const uint32_t timeout_ms = solua_net_timeout(
+        L, 3, SOLAR_OS_NET_DEFAULT_IO_TIMEOUT_MS);
+    uint8_t *buffer = solua_net_buffer(L, max_bytes);
+    solar_os_net_receive_result_t result;
+    const esp_err_t err = solar_os_net_session_tcp_receive(
+        solua_net_get(L),
+        handle,
+        buffer,
+        max_bytes,
+        timeout_ms,
+        &result);
+    if (err != ESP_OK) {
+        solar_os_memory_free(buffer);
+        return solua_check_esp(L, err);
+    }
+    if (result.timed_out) {
+        solar_os_memory_free(buffer);
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushlstring(L, (const char *)buffer, result.data_len);
+    solar_os_memory_free(buffer);
+    return 1;
+}
+
+static int solua_net_udp_open(lua_State *L)
+{
+    const uint16_t local_port = lua_isnoneornil(L, 1) ? 0 :
+        solua_net_port(L, 1, true);
+    uint32_t handle = 0;
+    (void)solua_check_esp(L,
+                          solar_os_net_session_udp_open(solua_net_get(L),
+                                                        local_port,
+                                                        &handle));
+    lua_pushinteger(L, handle);
+    return 1;
+}
+
+static int solua_net_udp_send(lua_State *L)
+{
+    size_t data_len = 0;
+    const char *data = luaL_checklstring(L, 4, &data_len);
+    return solua_check_esp(
+        L,
+        solar_os_net_session_udp_send(
+            solua_net_get(L),
+            solua_check_u32(L, 1),
+            luaL_checkstring(L, 2),
+            solua_net_port(L, 3, false),
+            data,
+            data_len,
+            solua_net_timeout(L, 5, SOLAR_OS_NET_DEFAULT_IO_TIMEOUT_MS)));
+}
+
+static int solua_net_udp_receive(lua_State *L)
+{
+    const size_t max_bytes = solua_net_receive_size(L, 2);
+    const uint32_t handle = solua_check_u32(L, 1);
+    const uint32_t timeout_ms = solua_net_timeout(
+        L, 3, SOLAR_OS_NET_DEFAULT_IO_TIMEOUT_MS);
+    uint8_t *buffer = solua_net_buffer(L, max_bytes);
+    solar_os_net_receive_result_t result;
+    const esp_err_t err = solar_os_net_session_udp_receive(
+        solua_net_get(L),
+        handle,
+        buffer,
+        max_bytes,
+        timeout_ms,
+        &result);
+    if (err != ESP_OK) {
+        solar_os_memory_free(buffer);
+        return solua_check_esp(L, err);
+    }
+    if (result.timed_out) {
+        solar_os_memory_free(buffer);
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_newtable(L);
+    lua_pushlstring(L, (const char *)buffer, result.data_len);
+    lua_setfield(L, -2, "data");
+    solua_set_str(L, -1, "address", result.address);
+    solua_set_int(L, -1, "port", result.port);
+    solua_set_bool(L, -1, "truncated", result.truncated);
+    solua_set_int(L, -1, "datagram_bytes", result.message_len);
+    solar_os_memory_free(buffer);
+    return 1;
+}
+
+static int solua_net_websocket_connect(lua_State *L)
+{
+    const char *subprotocol = lua_isnoneornil(L, 2) ? NULL :
+        luaL_checkstring(L, 2);
+    uint32_t handle = 0;
+    (void)solua_check_esp(
+        L,
+        solar_os_net_session_websocket_connect(
+            solua_net_get(L),
+            luaL_checkstring(L, 1),
+            subprotocol,
+            solua_net_timeout(L, 3, SOLAR_OS_NET_DEFAULT_CONNECT_TIMEOUT_MS),
+            &handle));
+    lua_pushinteger(L, handle);
+    return 1;
+}
+
+static int solua_net_websocket_send(lua_State *L)
+{
+    size_t data_len = 0;
+    const char *data = luaL_checklstring(L, 2, &data_len);
+    return solua_check_esp(
+        L,
+        solar_os_net_session_websocket_send(
+            solua_net_get(L),
+            solua_check_u32(L, 1),
+            data,
+            data_len,
+            !lua_isnoneornil(L, 3) && lua_toboolean(L, 3),
+            solua_net_timeout(L, 4, SOLAR_OS_NET_DEFAULT_IO_TIMEOUT_MS)));
+}
+
+static int solua_net_websocket_receive(lua_State *L)
+{
+    const size_t max_bytes = solua_net_receive_size(L, 2);
+    const uint32_t handle = solua_check_u32(L, 1);
+    const uint32_t timeout_ms = solua_net_timeout(
+        L, 3, SOLAR_OS_NET_DEFAULT_IO_TIMEOUT_MS);
+    uint8_t *buffer = solua_net_buffer(L, max_bytes);
+    solar_os_net_receive_result_t result;
+    const esp_err_t err = solar_os_net_session_websocket_receive(
+        solua_net_get(L),
+        handle,
+        buffer,
+        max_bytes,
+        timeout_ms,
+        &result);
+    if (err != ESP_OK) {
+        solar_os_memory_free(buffer);
+        return solua_check_esp(L, err);
+    }
+    if (result.timed_out) {
+        solar_os_memory_free(buffer);
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_newtable(L);
+    lua_pushlstring(L, (const char *)buffer, result.data_len);
+    lua_setfield(L, -2, "data");
+    solua_set_str(L, -1, "type", solar_os_net_ws_opcode_name(result.opcode));
+    solua_set_bool(L, -1, "final", result.final);
+    solua_set_bool(L, -1, "closed", result.closed);
+    solua_set_bool(L, -1, "truncated", result.truncated);
+    solua_set_int(L, -1, "frame_bytes", result.message_len);
+    solar_os_memory_free(buffer);
+    return 1;
+}
+
+static int solua_net_close(lua_State *L)
+{
+    return solua_check_esp(L,
+                           solar_os_net_session_close(solua_net_get(L),
+                                                      solua_check_u32(L, 1)));
+}
+
+static int solua_net_close_all(lua_State *L)
+{
+    (void)L;
+    if (solua_net_session != NULL) {
+        solar_os_net_session_close_all(solua_net_session);
+    }
+    return 0;
+}
+
+static int solua_net_limits(lua_State *L)
+{
+    solar_os_net_session_status_t status;
+    solar_os_net_session_get_status(solua_net_get(L), &status);
+    lua_newtable(L);
+    solua_set_str(L, -1, "owner", status.owner);
+    solua_set_int(L, -1, "open_channels", status.open_channels);
+    solua_set_int(L, -1, "session_channels", status.session_limit);
+    solua_set_int(L, -1, "global_open_channels", status.global_open_channels);
+    solua_set_int(L, -1, "global_channels", status.global_limit);
+    solua_set_int(L, -1, "max_transfer_bytes", SOLAR_OS_NET_MAX_TRANSFER_BYTES);
+    solua_set_int(L, -1, "max_udp_bytes", SOLAR_OS_NET_MAX_UDP_BYTES);
+    solua_set_int(L, -1, "max_timeout_ms", SOLAR_OS_NET_MAX_TIMEOUT_MS);
+    solua_set_int(L, -1, "poll_slice_ms", SOLAR_OS_NET_POLL_SLICE_MS);
+    solua_set_bool(L, -1, "synchronous", true);
+    return 1;
+}
+
 #endif
 
 #if SOLAR_OS_PACKAGE_SERVICE_SSH
@@ -5509,6 +5799,18 @@ static void solua_open_solaros(lua_State *L)
     solua_new_submodule(L, solaros, "net");
     mod = lua_gettop(L);
     solua_set_func(L, mod, "ping", solua_net_ping);
+    solua_set_func(L, mod, "tcp_connect", solua_net_tcp_connect);
+    solua_set_func(L, mod, "tcp_send", solua_net_tcp_send);
+    solua_set_func(L, mod, "tcp_receive", solua_net_tcp_receive);
+    solua_set_func(L, mod, "udp_open", solua_net_udp_open);
+    solua_set_func(L, mod, "udp_send", solua_net_udp_send);
+    solua_set_func(L, mod, "udp_receive", solua_net_udp_receive);
+    solua_set_func(L, mod, "websocket_connect", solua_net_websocket_connect);
+    solua_set_func(L, mod, "websocket_send", solua_net_websocket_send);
+    solua_set_func(L, mod, "websocket_receive", solua_net_websocket_receive);
+    solua_set_func(L, mod, "close", solua_net_close);
+    solua_set_func(L, mod, "close_all", solua_net_close_all);
+    solua_set_func(L, mod, "limits", solua_net_limits);
     lua_pop(L, 1);
 #endif
 
@@ -5883,6 +6185,9 @@ esp_err_t solar_os_lua_run(const solar_os_script_run_request_t *request,
 #if SOLAR_OS_PACKAGE_SERVICE_SYNTH
     (void)solar_os_synth_voice_stop(SOLUA_SYNTH_OWNER);
 #endif
+#if SOLAR_OS_PACKAGE_SERVICE_NET
+    solua_net_destroy();
+#endif
     lua_close(L);
 
 cleanup:
@@ -5964,6 +6269,9 @@ done:
 #endif
 #if SOLAR_OS_PACKAGE_SERVICE_SYNTH
         (void)solar_os_synth_voice_stop(SOLUA_SYNTH_OWNER);
+#endif
+#if SOLAR_OS_PACKAGE_SERVICE_NET
+        solua_net_destroy();
 #endif
         lua_close(L);
     }
@@ -6228,6 +6536,9 @@ static void solua_stop(solar_os_context_t *ctx)
 #endif
 #if SOLAR_OS_PACKAGE_SERVICE_HID
     solar_os_hid_release_all();
+#endif
+#if SOLAR_OS_PACKAGE_SERVICE_NET
+    solua_net_destroy();
 #endif
     solua_runtime_release(SOLUA_RUNTIME_OWNER_APP);
 }

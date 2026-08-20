@@ -13,7 +13,10 @@
   modules, including SHA-256 and hardware-seeded non-cryptographic randomness.
   Added SolarOS-backed `open()` text and binary streams plus external `.py`,
   `.mpy`, and package imports rooted at the script directory or preferred
-  storage.
+  storage. Added mirrored, synchronous managed TCP, UDP, WebSocket, and secure
+  WebSocket clients with interpreter-owned handles, bounded blocking,
+  cancellation checkpoints, automatic teardown, and explicit per-runtime,
+  global, timeout, and transfer limits.
 - **4.8.3** — 2026-08-12 — Gateway Chat now uses the global SolarOS user and
   hostname identity instead of a separate saved username. Added CRC-verified
   NVS backup and restore to disk with `/.solar/nvs.bin` as the default file.

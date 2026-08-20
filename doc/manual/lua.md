@@ -74,7 +74,7 @@ service packages are not available on that board.
 - `solaros.ble`: `status`, `connected`, `pair`, `forget`, `layout`, `read` when BLE support is compiled
 - `solaros.clipboard`: `set`, `get`, `size`, `clear`
 - `solaros.identity`: `user`, `hostname`, `set_user`, `set_hostname`, `format`
-- `solaros.net`: `ping` when `network.base` is compiled
+- `solaros.net`: `ping`, managed `tcp_connect`, `tcp_send`, `tcp_receive`, `udp_open`, `udp_send`, `udp_receive`, `websocket_connect`, `websocket_send`, `websocket_receive`, `close`, `close_all`, and `limits` when `network.base` is compiled
 - `solaros.ssh_keys`: `default_paths`, `default_exists`, `status`, `public_key`, `generate`, `remove` when `network.ssh` is compiled
 - `solaros.jobs`: `list`, `count`, `status`, `start`, `stop`
 - `solaros.sessions`: `create_shell`, `close`
@@ -85,6 +85,53 @@ service packages are not available on that board.
 - `solaros.gfx`: foreground graphics drawing functions
 
 Lua strings are binary-safe, so byte-oriented APIs such as `uart.read`, `i2c.read_reg`, `clipboard.get`, and `mqtt.read().payload` return Lua strings.
+
+### Managed TCP, UDP, and WebSocket clients
+
+`solaros.net` mirrors the Python managed-network API:
+
+- `tcp_connect(host, port[, timeout_ms])`, `tcp_send(handle, data[, timeout_ms])`, and `tcp_receive(handle[, max_bytes[, timeout_ms]])`
+- `udp_open([local_port])`, `udp_send(handle, host, port, data[, timeout_ms])`, and `udp_receive(handle[, max_bytes[, timeout_ms]])`
+- `websocket_connect(url[, subprotocol[, timeout_ms]])`, `websocket_send(handle, data[, text[, timeout_ms]])`, and `websocket_receive(handle[, max_bytes[, timeout_ms]])`
+- `close(handle)`, `close_all()`, and `limits()`
+
+Calls are synchronous. Connect defaults to 10000 ms; send and receive default
+to 1000 ms. The accepted range is 0 through 60000 ms. Receive returns `nil` on
+timeout. TCP peer closure returns an empty string. Other failures raise a Lua
+error. UDP results contain `data`, `address`, `port`, `truncated`, and
+`datagram_bytes`; WebSocket results contain `data`, `type`, `final`, `closed`,
+`truncated`, and `frame_bytes`.
+
+Each Lua app or runner invocation owns its handles exclusively. Handles cannot
+be shared with Python or another invocation, are generation checked, and close
+automatically before interpreter teardown on normal exit, error, cancellation,
+or forced cleanup. The combined per-invocation limit is four TCP, UDP, and
+WebSocket handles, with eight script handles globally. Transfers and WebSocket
+frames are limited to 65536 bytes and UDP datagrams to 65507 bytes. Oversized
+messages return the retained prefix and discard the remainder of that message.
+
+TCP and UDP waits check cancellation within 50 ms polling slices. DNS checks
+cancellation before and after the platform resolver. WebSocket DNS, TCP/TLS,
+upgrade, and frame operations check before and after their bounded transport
+call, so cancellation can take up to the remaining call timeout. TCP and UDP
+use one end-to-end deadline per public operation. A WebSocket public call can
+contain multiple platform transport stages; each stage is separately bounded
+by the supplied timeout, and cancellation is checked between stages.
+WebSocket receive polling, reading, and truncated-frame draining share the
+remaining SolarOS-layer deadline. `ws://` and certificate-validated `wss://`
+clients are supported; listener/server sockets, multicast, custom WebSocket
+headers, custom certificate stores, URL credentials, fragments, and IPv6
+literals are not.
+
+```lua
+local handle = solaros.net.udp_open()
+solaros.net.udp_send(handle, "example.com", 9000, "hello")
+local packet = solaros.net.udp_receive(handle, 4096, 1000)
+if packet then
+    print(packet.address, packet.port, packet.data)
+end
+solaros.net.close(handle)
+```
 
 ### HTTP requests
 

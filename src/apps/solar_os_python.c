@@ -90,6 +90,7 @@
 #endif
 #if SOLAR_OS_PACKAGE_SERVICE_NET
 #include "solar_os_net.h"
+#include "solar_os_net_session.h"
 #endif
 #if SOLAR_OS_PACKAGE_SERVICE_ONEWIRE
 #include "solar_os_onewire.h"
@@ -264,6 +265,9 @@ SOLAR_OS_APP_STATIC_SRAM_EXCEPTION("shared shell and Playground Python runtime")
 static python_runtime_owner_t python_runtime_owner;
 SOLAR_OS_APP_STATIC_SRAM_EXCEPTION("shared shell and Playground Python cadence")
 static uint32_t python_tick_interval_ms;
+#if SOLAR_OS_PACKAGE_SERVICE_NET
+static solar_os_net_session_t *python_net_session;
+#endif
 
 static bool python_runtime_claim(python_runtime_owner_t owner)
 {
@@ -942,6 +946,58 @@ static bool python_should_cancel(void *user)
     (void)user;
     return solar_os_micropython_stop_requested();
 }
+
+#if SOLAR_OS_PACKAGE_SERVICE_NET
+static solar_os_net_session_t *python_net_get(void)
+{
+    if (python_net_session == NULL) {
+        const char *owner = python_runner_control != NULL ? "python.runner" : "python.app";
+        python_check_esp(solar_os_net_session_create(owner,
+                                                     python_should_cancel,
+                                                     NULL,
+                                                     &python_net_session));
+    }
+    return python_net_session;
+}
+
+static void python_net_destroy(void)
+{
+    solar_os_net_session_destroy(python_net_session);
+    python_net_session = NULL;
+}
+
+static uint16_t python_net_port(mp_obj_t object)
+{
+    const uint32_t value = python_u32_from_obj(object);
+    if (value == 0 || value > UINT16_MAX) {
+        mp_raise_ValueError(MP_ERROR_TEXT("expected port 1..65535"));
+    }
+    return (uint16_t)value;
+}
+
+static size_t python_net_receive_size(size_t n_args,
+                                      const mp_obj_t *args,
+                                      size_t index)
+{
+    const size_t value = index < n_args ? python_size_from_obj(args[index]) : 4096U;
+    if (value == 0 || value > SOLAR_OS_NET_MAX_TRANSFER_BYTES) {
+        mp_raise_ValueError(MP_ERROR_TEXT("receive size out of range"));
+    }
+    return value;
+}
+
+static uint32_t python_net_timeout(size_t n_args,
+                                   const mp_obj_t *args,
+                                   size_t index,
+                                   uint32_t fallback)
+{
+    const uint32_t value = python_optional_u32(n_args, args, index, fallback);
+    if (value > SOLAR_OS_NET_MAX_TIMEOUT_MS) {
+        mp_raise_ValueError(MP_ERROR_TEXT("timeout out of range"));
+    }
+    return value;
+}
+#endif
 
 static mp_obj_t python_new_submodule(mp_obj_t parent, const char *name)
 {
@@ -4300,6 +4356,263 @@ static mp_obj_t solaros_net_ping(size_t n_args, const mp_obj_t *args)
 }
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_net_ping_obj, 1, 5, solaros_net_ping);
 
+static mp_obj_t solaros_net_tcp_connect(size_t n_args, const mp_obj_t *args)
+{
+    uint32_t handle = 0;
+    python_check_esp(solar_os_net_session_tcp_connect(
+        python_net_get(),
+        mp_obj_str_get_str(args[0]),
+        python_net_port(args[1]),
+        python_net_timeout(n_args,
+                           args,
+                           2,
+                           SOLAR_OS_NET_DEFAULT_CONNECT_TIMEOUT_MS),
+        &handle));
+    return mp_obj_new_int_from_uint(handle);
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_net_tcp_connect_obj,
+                                    2,
+                                    3,
+                                    solaros_net_tcp_connect);
+
+static mp_obj_t solaros_net_tcp_send(size_t n_args, const mp_obj_t *args)
+{
+    mp_buffer_info_t data;
+    mp_get_buffer_raise(args[1], &data, MP_BUFFER_READ);
+    python_check_esp(solar_os_net_session_tcp_send(
+        python_net_get(),
+        python_u32_from_obj(args[0]),
+        data.buf,
+        data.len,
+        python_net_timeout(n_args, args, 2, SOLAR_OS_NET_DEFAULT_IO_TIMEOUT_MS)));
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_net_tcp_send_obj,
+                                    2,
+                                    3,
+                                    solaros_net_tcp_send);
+
+static mp_obj_t solaros_net_tcp_receive(size_t n_args, const mp_obj_t *args)
+{
+    const size_t max_bytes = python_net_receive_size(n_args, args, 1);
+    const uint32_t handle = python_u32_from_obj(args[0]);
+    const uint32_t timeout_ms = python_net_timeout(
+        n_args, args, 2, SOLAR_OS_NET_DEFAULT_IO_TIMEOUT_MS);
+    vstr_t data;
+    vstr_init_len(&data, max_bytes);
+    solar_os_net_receive_result_t result;
+    const esp_err_t err = solar_os_net_session_tcp_receive(
+        python_net_get(),
+        handle,
+        data.buf,
+        max_bytes,
+        timeout_ms,
+        &result);
+    if (err != ESP_OK || result.timed_out) {
+        vstr_clear(&data);
+        if (err != ESP_OK) {
+            python_raise_esp(err);
+        }
+        return mp_const_none;
+    }
+    data.len = result.data_len;
+    return mp_obj_new_bytes_from_vstr(&data);
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_net_tcp_receive_obj,
+                                    1,
+                                    3,
+                                    solaros_net_tcp_receive);
+
+static mp_obj_t solaros_net_udp_open(size_t n_args, const mp_obj_t *args)
+{
+    uint16_t local_port = 0;
+    if (n_args > 0 && args[0] != mp_const_none) {
+        const uint32_t value = python_u32_from_obj(args[0]);
+        if (value > UINT16_MAX) {
+            mp_raise_ValueError(MP_ERROR_TEXT("local port out of range"));
+        }
+        local_port = (uint16_t)value;
+    }
+    uint32_t handle = 0;
+    python_check_esp(solar_os_net_session_udp_open(python_net_get(),
+                                                  local_port,
+                                                  &handle));
+    return mp_obj_new_int_from_uint(handle);
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_net_udp_open_obj,
+                                    0,
+                                    1,
+                                    solaros_net_udp_open);
+
+static mp_obj_t solaros_net_udp_send(size_t n_args, const mp_obj_t *args)
+{
+    mp_buffer_info_t data;
+    mp_get_buffer_raise(args[3], &data, MP_BUFFER_READ);
+    python_check_esp(solar_os_net_session_udp_send(
+        python_net_get(),
+        python_u32_from_obj(args[0]),
+        mp_obj_str_get_str(args[1]),
+        python_net_port(args[2]),
+        data.buf,
+        data.len,
+        python_net_timeout(n_args, args, 4, SOLAR_OS_NET_DEFAULT_IO_TIMEOUT_MS)));
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_net_udp_send_obj,
+                                    4,
+                                    5,
+                                    solaros_net_udp_send);
+
+static mp_obj_t solaros_net_udp_receive(size_t n_args, const mp_obj_t *args)
+{
+    const size_t max_bytes = python_net_receive_size(n_args, args, 1);
+    const uint32_t handle = python_u32_from_obj(args[0]);
+    const uint32_t timeout_ms = python_net_timeout(
+        n_args, args, 2, SOLAR_OS_NET_DEFAULT_IO_TIMEOUT_MS);
+    vstr_t data;
+    vstr_init_len(&data, max_bytes);
+    solar_os_net_receive_result_t result;
+    const esp_err_t err = solar_os_net_session_udp_receive(
+        python_net_get(),
+        handle,
+        data.buf,
+        max_bytes,
+        timeout_ms,
+        &result);
+    if (err != ESP_OK || result.timed_out) {
+        vstr_clear(&data);
+        if (err != ESP_OK) {
+            python_raise_esp(err);
+        }
+        return mp_const_none;
+    }
+    data.len = result.data_len;
+    mp_obj_t response = mp_obj_new_dict(5);
+    mp_obj_dict_store(response, python_key("data"), mp_obj_new_bytes_from_vstr(&data));
+    python_dict_store_cstr(response, "address", result.address);
+    python_dict_store_uint(response, "port", result.port);
+    python_dict_store_bool(response, "truncated", result.truncated);
+    python_dict_store_uint(response, "datagram_bytes", result.message_len);
+    return response;
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_net_udp_receive_obj,
+                                    1,
+                                    3,
+                                    solaros_net_udp_receive);
+
+static mp_obj_t solaros_net_websocket_connect(size_t n_args, const mp_obj_t *args)
+{
+    const char *subprotocol = n_args > 1 && args[1] != mp_const_none ?
+        mp_obj_str_get_str(args[1]) : NULL;
+    uint32_t handle = 0;
+    python_check_esp(solar_os_net_session_websocket_connect(
+        python_net_get(),
+        mp_obj_str_get_str(args[0]),
+        subprotocol,
+        python_net_timeout(n_args,
+                           args,
+                           2,
+                           SOLAR_OS_NET_DEFAULT_CONNECT_TIMEOUT_MS),
+        &handle));
+    return mp_obj_new_int_from_uint(handle);
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_net_websocket_connect_obj,
+                                    1,
+                                    3,
+                                    solaros_net_websocket_connect);
+
+static mp_obj_t solaros_net_websocket_send(size_t n_args, const mp_obj_t *args)
+{
+    mp_buffer_info_t data;
+    mp_get_buffer_raise(args[1], &data, MP_BUFFER_READ);
+    python_check_esp(solar_os_net_session_websocket_send(
+        python_net_get(),
+        python_u32_from_obj(args[0]),
+        data.buf,
+        data.len,
+        n_args > 2 && mp_obj_is_true(args[2]),
+        python_net_timeout(n_args, args, 3, SOLAR_OS_NET_DEFAULT_IO_TIMEOUT_MS)));
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_net_websocket_send_obj,
+                                    2,
+                                    4,
+                                    solaros_net_websocket_send);
+
+static mp_obj_t solaros_net_websocket_receive(size_t n_args, const mp_obj_t *args)
+{
+    const size_t max_bytes = python_net_receive_size(n_args, args, 1);
+    const uint32_t handle = python_u32_from_obj(args[0]);
+    const uint32_t timeout_ms = python_net_timeout(
+        n_args, args, 2, SOLAR_OS_NET_DEFAULT_IO_TIMEOUT_MS);
+    vstr_t data;
+    vstr_init_len(&data, max_bytes);
+    solar_os_net_receive_result_t result;
+    const esp_err_t err = solar_os_net_session_websocket_receive(
+        python_net_get(),
+        handle,
+        data.buf,
+        max_bytes,
+        timeout_ms,
+        &result);
+    if (err != ESP_OK || result.timed_out) {
+        vstr_clear(&data);
+        if (err != ESP_OK) {
+            python_raise_esp(err);
+        }
+        return mp_const_none;
+    }
+    data.len = result.data_len;
+    mp_obj_t response = mp_obj_new_dict(6);
+    mp_obj_dict_store(response, python_key("data"), mp_obj_new_bytes_from_vstr(&data));
+    python_dict_store_cstr(response, "type", solar_os_net_ws_opcode_name(result.opcode));
+    python_dict_store_bool(response, "final", result.final);
+    python_dict_store_bool(response, "closed", result.closed);
+    python_dict_store_bool(response, "truncated", result.truncated);
+    python_dict_store_uint(response, "frame_bytes", result.message_len);
+    return response;
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(solaros_net_websocket_receive_obj,
+                                    1,
+                                    3,
+                                    solaros_net_websocket_receive);
+
+static mp_obj_t solaros_net_close(mp_obj_t handle)
+{
+    python_check_esp(solar_os_net_session_close(python_net_get(),
+                                               python_u32_from_obj(handle)));
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_1(solaros_net_close_obj, solaros_net_close);
+
+static mp_obj_t solaros_net_close_all(void)
+{
+    if (python_net_session != NULL) {
+        solar_os_net_session_close_all(python_net_session);
+    }
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_0(solaros_net_close_all_obj, solaros_net_close_all);
+
+static mp_obj_t solaros_net_limits(void)
+{
+    solar_os_net_session_status_t status;
+    solar_os_net_session_get_status(python_net_get(), &status);
+    mp_obj_t response = mp_obj_new_dict(10);
+    python_dict_store_cstr(response, "owner", status.owner);
+    python_dict_store_uint(response, "open_channels", status.open_channels);
+    python_dict_store_uint(response, "session_channels", status.session_limit);
+    python_dict_store_uint(response, "global_open_channels", status.global_open_channels);
+    python_dict_store_uint(response, "global_channels", status.global_limit);
+    python_dict_store_uint(response, "max_transfer_bytes", SOLAR_OS_NET_MAX_TRANSFER_BYTES);
+    python_dict_store_uint(response, "max_udp_bytes", SOLAR_OS_NET_MAX_UDP_BYTES);
+    python_dict_store_uint(response, "max_timeout_ms", SOLAR_OS_NET_MAX_TIMEOUT_MS);
+    python_dict_store_uint(response, "poll_slice_ms", SOLAR_OS_NET_POLL_SLICE_MS);
+    python_dict_store_bool(response, "synchronous", true);
+    return response;
+}
+MP_DEFINE_CONST_FUN_OBJ_0(solaros_net_limits_obj, solaros_net_limits);
+
 #endif
 
 #if SOLAR_OS_PACKAGE_SERVICE_SSH
@@ -5839,6 +6152,24 @@ static void python_register_solaros_module(void)
 #if SOLAR_OS_PACKAGE_SERVICE_NET
     mp_obj_t net = python_new_submodule(module, "net");
     python_module_store(net, "ping", MP_OBJ_FROM_PTR(&solaros_net_ping_obj));
+    python_module_store(net, "tcp_connect", MP_OBJ_FROM_PTR(&solaros_net_tcp_connect_obj));
+    python_module_store(net, "tcp_send", MP_OBJ_FROM_PTR(&solaros_net_tcp_send_obj));
+    python_module_store(net, "tcp_receive", MP_OBJ_FROM_PTR(&solaros_net_tcp_receive_obj));
+    python_module_store(net, "udp_open", MP_OBJ_FROM_PTR(&solaros_net_udp_open_obj));
+    python_module_store(net, "udp_send", MP_OBJ_FROM_PTR(&solaros_net_udp_send_obj));
+    python_module_store(net, "udp_receive", MP_OBJ_FROM_PTR(&solaros_net_udp_receive_obj));
+    python_module_store(net,
+                        "websocket_connect",
+                        MP_OBJ_FROM_PTR(&solaros_net_websocket_connect_obj));
+    python_module_store(net,
+                        "websocket_send",
+                        MP_OBJ_FROM_PTR(&solaros_net_websocket_send_obj));
+    python_module_store(net,
+                        "websocket_receive",
+                        MP_OBJ_FROM_PTR(&solaros_net_websocket_receive_obj));
+    python_module_store(net, "close", MP_OBJ_FROM_PTR(&solaros_net_close_obj));
+    python_module_store(net, "close_all", MP_OBJ_FROM_PTR(&solaros_net_close_all_obj));
+    python_module_store(net, "limits", MP_OBJ_FROM_PTR(&solaros_net_limits_obj));
 #endif
 
 #if SOLAR_OS_PACKAGE_SERVICE_SSH
@@ -6206,6 +6537,9 @@ esp_err_t solar_os_python_run(const solar_os_script_run_request_t *request,
 #if SOLAR_OS_PACKAGE_SERVICE_SYNTH
     (void)solar_os_synth_voice_stop(PYTHON_SYNTH_OWNER);
 #endif
+#if SOLAR_OS_PACKAGE_SERVICE_NET
+    python_net_destroy();
+#endif
     mp_embed_deinit();
     python_app.vm_active = false;
     python_runner_control = NULL;
@@ -6374,6 +6708,9 @@ static void python_task(void *arg)
 #endif
 #if SOLAR_OS_PACKAGE_SERVICE_SYNTH
         (void)solar_os_synth_voice_stop(PYTHON_SYNTH_OWNER);
+#endif
+#if SOLAR_OS_PACKAGE_SERVICE_NET
+        python_net_destroy();
 #endif
         mp_embed_deinit();
         python_app.vm_active = false;
@@ -6795,6 +7132,9 @@ static void python_stop(solar_os_context_t *ctx)
 #endif
 #if SOLAR_OS_PACKAGE_SERVICE_HID
     solar_os_hid_release_all();
+#endif
+#if SOLAR_OS_PACKAGE_SERVICE_NET
+    python_net_destroy();
 #endif
     python_runtime_release(PYTHON_RUNTIME_OWNER_APP);
 }
