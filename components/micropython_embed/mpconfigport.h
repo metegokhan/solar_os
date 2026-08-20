@@ -14,6 +14,7 @@
 #define MICROPY_PERSISTENT_CODE_LOAD            (1)
 #define MICROPY_FLOAT_IMPL                      (MICROPY_FLOAT_IMPL_FLOAT)
 #define MICROPY_GCREGS_SETJMP                  (1)
+#define MICROPY_STACK_CHECK_MARGIN              (1024U)
 
 /* SolarOS-backed files and source/bytecode imports. */
 #define MICROPY_ENABLE_EXTERNAL_IMPORT          (1)

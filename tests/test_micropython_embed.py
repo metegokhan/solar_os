@@ -97,6 +97,22 @@ class MicroPythonEmbedTest(unittest.TestCase):
         ):
             self.assertRegex(config, rf"#define {feature}\s+\(0\)")
 
+    def test_extra_profile_initializes_c_stack_limit(self):
+        config = (
+            generate_micropython_embed.COMPONENT / "mpconfigport.h"
+        ).read_text(encoding="utf-8")
+        self.assertRegex(
+            config,
+            r"#define MICROPY_STACK_CHECK_MARGIN\s+\(1024U\)",
+        )
+        source = (
+            generate_micropython_embed.PORT_OVERRIDES / "embed_util.c"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "mp_cstack_init_with_top(stack_top, uxTaskGetStackHighWaterMark(NULL));",
+            source,
+        )
+
     def test_import_reader_uses_solaros_path_resolution(self):
         source = (
             generate_micropython_embed.PACKAGE / "py" / "reader.c"

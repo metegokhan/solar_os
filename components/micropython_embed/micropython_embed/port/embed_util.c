@@ -25,17 +25,22 @@
  */
 
 #include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "py/compile.h"
+#include "py/cstack.h"
 #include "py/gc.h"
 #include "py/persistentcode.h"
 #include "py/runtime.h"
-#include "py/stackctrl.h"
 #include "shared/runtime/gchelper.h"
 #include "port/micropython_embed.h"
 
 // Initialise the runtime.
 void mp_embed_init(void *gc_heap, size_t gc_heap_size, void *stack_top) {
-    mp_stack_set_top(stack_top);
+    // EXTRA enables C-stack checking. FreeRTOS reports the minimum unused
+    // stack in bytes, which gives the VM a conservative limit for both the
+    // foreground Python task and Agent's in-task script runner.
+    mp_cstack_init_with_top(stack_top, uxTaskGetStackHighWaterMark(NULL));
     gc_init(gc_heap, (uint8_t *)gc_heap + gc_heap_size);
     mp_init();
 }
