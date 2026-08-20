@@ -3,7 +3,10 @@ CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror
 
 ROOT := ../..
 WRITER_DIR := $(ROOT)/src/apps
-TARGETS := writer_buffer_test writer_files_test doc_layout_test shell_parse_test shell_launch_test app_file_types_test gameboy_support_test storage_mounts_test keys_test input_test hid_keyboard_report_test ps2_keyboard_test midi_codec_test parameters_test controls_test dsp_test stream_test audio_codec_test webradio_catalog_test nvs_backup_test
+TARGETS := writer_buffer_test writer_files_test doc_layout_test shell_parse_test shell_launch_test app_file_types_test gameboy_support_test storage_mounts_test keys_test input_test hid_keyboard_report_test ps2_keyboard_test midi_codec_test parameters_test controls_test dsp_test stream_test audio_codec_test webradio_catalog_test nvs_backup_test agent_reference_test
+
+MANUAL_GENERATED_DIR := generated/solar_os
+MANUAL_GENERATED_HEADER := $(MANUAL_GENERATED_DIR)/solar_os_manual_data.h
 
 .PHONY: all test clean
 
@@ -99,6 +102,17 @@ nvs_backup_test: nvs_backup_test.c $(ROOT)/src/services/solar_os_nvs_backup.c $(
 	$(CC) $(CFLAGS) -D_GNU_SOURCE -include compat.h -I. -I$(ROOT)/src/services \
 		nvs_backup_test.c $(ROOT)/src/services/solar_os_nvs_backup.c -o $@
 
+$(MANUAL_GENERATED_HEADER): $(ROOT)/scripts/generate_manual.py $(ROOT)/packages/solar_os_packages.toml $(wildcard $(ROOT)/doc/manual/*.md)
+	mkdir -p $(MANUAL_GENERATED_DIR)
+	python3 $(ROOT)/scripts/generate_manual.py --input $(ROOT)/doc/manual \
+		--packages $(ROOT)/packages/solar_os_packages.toml --output $@
+
+agent_reference_test: agent_reference_test.c $(MANUAL_GENERATED_HEADER) $(ROOT)/src/services/solar_os_agent_reference.c $(ROOT)/src/services/solar_os_agent_reference.h $(ROOT)/src/services/solar_os_manual.c $(ROOT)/src/services/solar_os_manual.h
+	$(CC) $(CFLAGS) -Wno-comment -D_GNU_SOURCE -ffunction-sections -fdata-sections \
+		-I. -I$(MANUAL_GENERATED_DIR) -I$(ROOT)/src -I$(ROOT)/src/services \
+		agent_reference_test.c $(ROOT)/src/services/solar_os_agent_reference.c \
+		$(ROOT)/src/services/solar_os_manual.c -Wl,--gc-sections -o $@
+
 test: $(TARGETS)
 	./writer_buffer_test
 	./writer_files_test
@@ -120,6 +134,8 @@ test: $(TARGETS)
 	./audio_codec_test
 	./webradio_catalog_test
 	./nvs_backup_test
+	./agent_reference_test
 
 clean:
 	$(RM) $(TARGETS)
+	$(RM) -r generated

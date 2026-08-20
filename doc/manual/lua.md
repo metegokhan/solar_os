@@ -6,6 +6,7 @@ summary = "Complete Lua service API, conventions, and examples"
 aliases = ["lua.api"]
 keywords = "lua solaros api storage wifi gpio buses gfx tui examples"
 packages_any = ["app_lua"]
+agent_reference_sections = true
 +++
 # SolarOS Lua API
 

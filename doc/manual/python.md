@@ -6,6 +6,7 @@ summary = "Complete MicroPython service API, conventions, and examples"
 aliases = ["micropython", "python.api"]
 keywords = "python micropython solaros api storage wifi gpio buses gfx tui examples"
 packages_any = ["app_python"]
+agent_reference_sections = true
 +++
 # SolarOS Python API
 
