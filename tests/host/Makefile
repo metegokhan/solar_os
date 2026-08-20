@@ -3,7 +3,7 @@ CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror
 
 ROOT := ../..
 WRITER_DIR := $(ROOT)/src/apps
-TARGETS := writer_buffer_test writer_files_test doc_layout_test shell_parse_test shell_launch_test app_file_types_test gameboy_support_test storage_mounts_test keys_test input_test board_caps_test hid_keyboard_report_test ps2_keyboard_test midi_codec_test parameters_test controls_test dsp_test stream_test audio_codec_test webradio_catalog_test nvs_backup_test agent_reference_test
+TARGETS := writer_buffer_test writer_files_test doc_layout_test shell_parse_test shell_launch_test shell_line_test app_file_types_test gameboy_support_test storage_mounts_test keys_test input_test board_caps_test hid_keyboard_report_test ps2_keyboard_test midi_codec_test parameters_test controls_test dsp_test stream_test audio_codec_test webradio_catalog_test nvs_backup_test agent_reference_test
 
 MANUAL_GENERATED_DIR := generated/solar_os
 MANUAL_GENERATED_HEADER := $(MANUAL_GENERATED_DIR)/solar_os_manual_data.h
@@ -34,6 +34,10 @@ shell_parse_test: shell_parse_test.c $(ROOT)/src/shell/solar_os_shell_parse.c $(
 shell_launch_test: shell_launch_test.c $(ROOT)/src/shell/solar_os_shell_launch.c $(ROOT)/src/shell/solar_os_shell_launch.h
 	$(CC) $(CFLAGS) -I$(ROOT)/src/shell \
 		shell_launch_test.c $(ROOT)/src/shell/solar_os_shell_launch.c -o $@
+
+shell_line_test: shell_line_test.c $(ROOT)/src/shell/solar_os_shell_line.c $(ROOT)/src/shell/solar_os_shell_line.h
+	$(CC) $(CFLAGS) -I$(ROOT)/src/shell \
+		shell_line_test.c $(ROOT)/src/shell/solar_os_shell_line.c -o $@
 
 app_file_types_test: app_file_types_test.c $(ROOT)/src/apps/solar_os_app_file_types.c $(ROOT)/src/apps/solar_os_app_file_types.h
 	$(CC) $(CFLAGS) -I$(ROOT)/src/apps \
@@ -140,6 +144,7 @@ test: $(TARGETS)
 	./doc_layout_test
 	./shell_parse_test
 	./shell_launch_test
+	./shell_line_test
 	./app_file_types_test
 	./gameboy_support_test
 	./storage_mounts_test

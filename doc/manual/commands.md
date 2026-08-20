@@ -27,6 +27,10 @@ Wildcard patterns are supported by selected filesystem commands, for example
 Tab completion covers commands, subcommands, filesystem paths, job names, port
 names, and stream IDs where the command exposes enough structure.
 
+`Ctrl+V` pastes the shared SolarOS clipboard at the command-line cursor. Line
+breaks and tabs become spaces, and a paste stops at the shell input limit; it
+never executes a command by itself.
+
 Invalid input is reported as a specific problem followed by only the relevant
 usage line. Close, unambiguous command and subcommand typos include a `did you
 mean` hint; SolarOS never runs the suggested command automatically. Missing,

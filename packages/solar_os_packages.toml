@@ -322,6 +322,7 @@ sources = [
   "shell/solar_os_shell_commands.c",
   "shell/solar_os_shell_io.c",
   "shell/solar_os_shell_manual.c",
+  "shell/solar_os_shell_line.c",
   "shell/solar_os_shell_setterm_tui.c",
   "shell/solar_os_shell_system.c",
   "shell/solar_os_vt100.c",

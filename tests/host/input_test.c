@@ -76,6 +76,9 @@ int main(void)
     assert(solar_os_input_translate_hid_usage(0x04,
                                               SOLAR_OS_INPUT_MOD_LEFT_SHIFT,
                                               false) == 'A');
+    assert(solar_os_input_translate_hid_usage(0x19,
+                                              SOLAR_OS_INPUT_MOD_LEFT_CTRL,
+                                              false) == 0x16);
     assert(solar_os_input_translate_hid_usage(0x30,
                                               SOLAR_OS_INPUT_MOD_LEFT_CTRL,
                                               false) == SOLAR_OS_KEY_APP_EXIT);
