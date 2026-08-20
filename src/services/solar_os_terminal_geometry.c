@@ -19,10 +19,8 @@ bool solar_os_terminal_geometry_compute(int display_height,
     size_t rows = content_height >= line_height ?
         (size_t)(content_height / line_height) : 1U;
     if (rows > max_rows) rows = max_rows;
-    const int used_height = (int)rows * line_height;
-    const int residual = content_height > used_height ? content_height - used_height : 0;
     geometry->rows = rows;
-    geometry->grid_top = status_bar_height + residual;
+    geometry->grid_top = status_bar_height;
     geometry->baseline_offset = geometry->grid_top + cell_ascent;
     geometry->content_bottom = content_bottom;
     return true;

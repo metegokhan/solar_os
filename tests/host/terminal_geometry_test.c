@@ -9,12 +9,13 @@ static void expect_geometry(int height, int status, int footer, int line, int as
     assert(solar_os_terminal_geometry_compute(height, status, footer, line, ascent,
                                               64, &geometry));
     assert(geometry.rows >= 1);
-    assert(geometry.grid_top >= status);
+    assert(geometry.grid_top == status);
     assert(geometry.baseline_offset == geometry.grid_top + ascent);
     assert(geometry.grid_top + (int)geometry.rows * line <= geometry.content_bottom);
-    assert(geometry.content_bottom -
-           (geometry.grid_top + (int)geometry.rows * line) == 0);
-    assert(geometry.grid_top - status < line);
+    const int bottom_gap = geometry.content_bottom -
+                           (geometry.grid_top + (int)geometry.rows * line);
+    assert(bottom_gap >= 0);
+    assert(bottom_gap < line);
 }
 int main(void)
 {
