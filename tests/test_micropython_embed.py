@@ -15,28 +15,65 @@ SPEC.loader.exec_module(generate_micropython_embed)
 
 
 class MicroPythonEmbedTest(unittest.TestCase):
-    def test_extra_profile_modules_are_registered(self):
+    def test_selected_standard_modules_are_registered(self):
         moduledefs = (
             generate_micropython_embed.PACKAGE / "genhdr" / "moduledefs.h"
         ).read_text(encoding="utf-8")
         for module in (
             "ARRAY",
+            "BINASCII",
             "CMATH",
             "COLLECTIONS",
             "ERRNO",
             "GC",
+            "HASHLIB",
+            "JSON",
             "MATH",
             "MICROPYTHON",
+            "RANDOM",
             "STRUCT",
             "SYS",
         ):
             self.assertIn(f"MODULE_DEF_{module}", moduledefs)
 
-    def test_extra_profile_keeps_unintegrated_port_features_disabled(self):
+    def test_selected_extmod_sources_are_vendored(self):
+        for relative in (
+            generate_micropython_embed.SELECTED_EXTMOD_SOURCES
+            + generate_micropython_embed.SELECTED_EXTMOD_SUPPORT
+        ):
+            self.assertTrue((generate_micropython_embed.PACKAGE / relative).is_file())
+
+    def test_json_internal_stringio_is_compiled_without_public_io_module(self):
+        source = (
+            generate_micropython_embed.PACKAGE / "py" / "objstringio.c"
+        ).read_text(encoding="utf-8")
+        self.assertIn("#if MICROPY_PY_IO || MICROPY_PY_JSON", source)
+        moduledefs = (
+            generate_micropython_embed.PACKAGE / "genhdr" / "moduledefs.h"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("MODULE_DEF_IO", moduledefs)
+
+    def test_selected_standard_modules_are_enabled(self):
         config = (
             generate_micropython_embed.COMPONENT / "mpconfigport.h"
         ).read_text(encoding="utf-8")
         self.assertIn("MICROPY_CONFIG_ROM_LEVEL_EXTRA_FEATURES", config)
+        for feature in (
+            "MICROPY_PY_JSON",
+            "MICROPY_PY_BINASCII",
+            "MICROPY_PY_HASHLIB",
+            "MICROPY_PY_HASHLIB_SHA256",
+            "MICROPY_PY_RANDOM",
+            "MICROPY_PY_MATH",
+            "MICROPY_PY_STRUCT",
+            "MICROPY_PY_COLLECTIONS",
+        ):
+            self.assertRegex(config, rf"#define {feature}\s+\(1\)")
+
+    def test_extra_profile_keeps_unintegrated_port_features_disabled(self):
+        config = (
+            generate_micropython_embed.COMPONENT / "mpconfigport.h"
+        ).read_text(encoding="utf-8")
         for feature in (
             "MICROPY_ENABLE_EXTERNAL_IMPORT",
             "MICROPY_PY_BUILTINS_EXECFILE",
@@ -44,8 +81,9 @@ class MicroPythonEmbedTest(unittest.TestCase):
             "MICROPY_PY_IO",
             "MICROPY_PY_SYS_STDFILES",
             "MICROPY_PY_ASYNCIO",
-            "MICROPY_PY_JSON",
             "MICROPY_PY_OS",
+            "MICROPY_PY_HASHLIB_MD5",
+            "MICROPY_PY_HASHLIB_SHA1",
             "MICROPY_PY_LWIP",
             "MICROPY_PY_SSL",
             "MICROPY_PY_WEBSOCKET",

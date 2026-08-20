@@ -1,5 +1,7 @@
 /* SolarOS MicroPython embed configuration. */
 
+#include <stdint.h>
+
 #include <port/mpconfigport_common.h>
 
 #define MICROPY_CONFIG_ROM_LEVEL                (MICROPY_CONFIG_ROM_LEVEL_EXTRA_FEATURES)
@@ -19,17 +21,28 @@
 #define MICROPY_PY_IO                           (0)
 #define MICROPY_PY_SYS_STDFILES                 (0)
 
-/* The generated embed package currently vendors py core, not extmod sources. */
+/* Selected standard modules supported by the SolarOS embed port. */
+#define MICROPY_PY_JSON                         (1)
+#define MICROPY_PY_BINASCII                     (1)
+#define MICROPY_PY_HASHLIB                      (1)
+#define MICROPY_PY_HASHLIB_MD5                  (0)
+#define MICROPY_PY_HASHLIB_SHA1                 (0)
+#define MICROPY_PY_HASHLIB_SHA256               (1)
+#define MICROPY_PY_RANDOM                       (1)
+#define MICROPY_PY_MATH                         (1)
+#define MICROPY_PY_STRUCT                       (1)
+#define MICROPY_PY_COLLECTIONS                  (1)
+
+uint32_t solar_os_micropython_random_seed(void);
+#define MICROPY_PY_RANDOM_SEED_INIT_FUNC        (solar_os_micropython_random_seed())
+
+/* Other extmod features remain disabled until their port integration exists. */
 #define MICROPY_PY_ASYNCIO                      (0)
 #define MICROPY_PY_UCTYPES                      (0)
 #define MICROPY_PY_DEFLATE                      (0)
-#define MICROPY_PY_JSON                         (0)
 #define MICROPY_PY_OS                           (0)
 #define MICROPY_PY_RE                           (0)
 #define MICROPY_PY_HEAPQ                        (0)
-#define MICROPY_PY_HASHLIB                      (0)
-#define MICROPY_PY_BINASCII                     (0)
-#define MICROPY_PY_RANDOM                       (0)
 #define MICROPY_PY_SELECT                       (0)
 #define MICROPY_PY_TIME                         (0)
 #define MICROPY_PY_FRAMEBUF                     (0)

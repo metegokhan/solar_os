@@ -29,3 +29,9 @@ files in `overrides/port/` are applied automatically. They provide cooperative
 VM cancellation/yielding, route stdout through SolarOS, provide the interrupt
 hook used by `micropython.kbd_intr()`, and keep `__assert_func()` weak for
 ESP-IDF newlib.
+
+The generator also vendors the selected `json`, `binascii`, `hashlib`, and
+`random` extmod sources and the SHA-256 support used by `hashlib`. It scans
+those sources while generating qstr and module tables. The public `io` module
+stays disabled, but the internal `StringIO` implementation is compiled because
+`json.loads()` uses it to parse an in-memory string.

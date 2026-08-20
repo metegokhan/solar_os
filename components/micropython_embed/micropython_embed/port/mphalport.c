@@ -29,6 +29,7 @@
 #include <stdint.h>
 
 #include "esp_log.h"
+#include "esp_random.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "py/mphal.h"
@@ -38,6 +39,10 @@
 #define SOLAR_OS_MICROPYTHON_YIELD_MS 5U
 
 static const char *TAG = "mp_vm";
+
+uint32_t solar_os_micropython_random_seed(void) {
+    return esp_random();
+}
 
 __attribute__((weak)) bool solar_os_micropython_stop_requested(void) {
     return false;

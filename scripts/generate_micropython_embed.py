@@ -18,6 +18,24 @@ PACKAGE = COMPONENT / "micropython_embed"
 QSTR_DEFS = COMPONENT / "qstrdefs.h"
 PORT_OVERRIDES = COMPONENT / "overrides" / "port"
 
+SELECTED_EXTMOD_SOURCES = (
+    Path("extmod/modbinascii.c"),
+    Path("extmod/modhashlib.c"),
+    Path("extmod/modjson.c"),
+    Path("extmod/modrandom.c"),
+)
+SELECTED_EXTMOD_SUPPORT = (
+    Path("lib/crypto-algorithms/sha256.c"),
+    Path("lib/crypto-algorithms/sha256.h"),
+)
+SOURCE_REPLACEMENTS = {
+    Path("py/objstringio.c"): (
+        "#if MICROPY_PY_IO\n",
+        "/* SolarOS: json.loads uses StringIO while the public io module is disabled. */\n"
+        "#if MICROPY_PY_IO || MICROPY_PY_JSON\n",
+    ),
+}
+
 MICROPYTHON_URL = "https://github.com/micropython/micropython.git"
 MICROPYTHON_COMMIT = "d901e9834939372f68974010f32e146596a69bb0"
 MICROPYTHON_GIT_TAG = "d901e98349"
@@ -25,8 +43,18 @@ MICROPYTHON_GIT_HASH = "d901e98"
 MICROPYTHON_SOURCE_DATE_EPOCH = "1781248016"
 
 REQUIRED_OUTPUT = {
-    Path("genhdr/moduledefs.h"): ("MODULE_DEF_ARRAY",),
+    Path("genhdr/moduledefs.h"): (
+        "MODULE_DEF_ARRAY",
+        "MODULE_DEF_BINASCII",
+        "MODULE_DEF_COLLECTIONS",
+        "MODULE_DEF_HASHLIB",
+        "MODULE_DEF_JSON",
+        "MODULE_DEF_MATH",
+        "MODULE_DEF_RANDOM",
+        "MODULE_DEF_STRUCT",
+    ),
     Path("genhdr/qstrdefs.generated.h"): (
+        "MP_QSTR_StringIO",
         "MP_QSTR_dsp_processor",
         "MP_QSTR_execute",
         "MP_QSTR_process",
@@ -102,6 +130,22 @@ def prepare_upstream(repository: Path | None, temporary: Path) -> Path:
 def generate(source: Path, temporary: Path) -> Path:
     build = temporary / "build"
     package = temporary / "micropython_embed"
+    for relative, (original, replacement) in SOURCE_REPLACEMENTS.items():
+        path = source / relative
+        text = path.read_text(encoding="utf-8")
+        if text.count(original) != 1:
+            raise RuntimeError(f"unexpected upstream content in {relative}")
+        path.write_text(text.replace(original, replacement), encoding="utf-8")
+
+    makefile = temporary / "micropython-embed-selected.mk"
+    makefile.write_text(
+        "SRC_QSTR := "
+        + " ".join(str(path) for path in SELECTED_EXTMOD_SOURCES)
+        + "\ninclude "
+        + str(source / "ports" / "embed" / "embed.mk")
+        + "\n",
+        encoding="utf-8",
+    )
     environment = os.environ.copy()
     environment.update({
         "LC_ALL": "C",
@@ -113,12 +157,17 @@ def generate(source: Path, temporary: Path) -> Path:
     run([
         "make",
         "-f",
-        str(source / "ports" / "embed" / "embed.mk"),
+        str(makefile),
         f"MICROPYTHON_TOP={source}",
         f"BUILD={build}",
         f"PACKAGE_DIR={package}",
         f"QSTR_DEFS={QSTR_DEFS}",
     ], cwd=COMPONENT, env=environment)
+
+    for relative in SELECTED_EXTMOD_SOURCES + SELECTED_EXTMOD_SUPPORT:
+        destination = package / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source / relative, destination)
 
     for override in sorted(PORT_OVERRIDES.iterdir()):
         if override.is_file():

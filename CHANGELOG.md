@@ -9,6 +9,8 @@
   `collections`, `errno`, `math`, and `struct` modules. Added mirrored,
   cancellation-aware `solaros.http` Python and Lua bindings for bounded HTTP
   GET, POST, PUT, PATCH, DELETE, HEAD, redirects, headers, and binary bodies.
+  Added the selected `json`, `binascii`, `hashlib`, and `random` standard
+  modules, including SHA-256 and hardware-seeded non-cryptographic randomness.
 - **4.8.3** — 2026-08-12 — Gateway Chat now uses the global SolarOS user and
   hostname identity instead of a separate saved username. Added CRC-verified
   NVS backup and restore to disk with `/.solar/nvs.bin` as the default file.

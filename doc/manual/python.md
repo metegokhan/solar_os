@@ -33,12 +33,21 @@ Most mutating functions return `None` on success and raise `OSError("ESP_ERR_...
 SolarOS uses MicroPython's size-conscious `EXTRA` language profile. This adds
 common language features such as f-strings, sets, properties, descriptors,
 `enumerate()`, `filter()`, `reversed()`, `memoryview`, and `frozenset`. The
-importable runtime modules are `array`, `cmath`, `collections`, `errno`, `gc`,
-`math`, `micropython`, `struct`, and `sys`.
+importable runtime modules are `array`, `binascii`, `cmath`, `collections`,
+`errno`, `gc`, `hashlib`, `json`, `math`, `micropython`, `random`, `struct`,
+and `sys`.
 
 File-backed imports, `open()`, `input()`, `execfile()`, and upstream `extmod`
-modules remain disabled until they have SolarOS storage, stream, cancellation,
-and ownership integration. Use the typed `solaros` service APIs instead.
+modules outside this selected set remain disabled until they have SolarOS
+storage, stream, cancellation, and ownership integration. Use the typed
+`solaros` service APIs instead.
+
+The selected modules include `json.loads()` and `json.dumps()`, hexadecimal and
+Base64 conversions in `binascii`, SHA-256 in `hashlib`, and the usual
+non-cryptographic `random` helpers. SolarOS seeds `random` from the ESP32
+hardware random source when the module is first imported. Use `hashlib` for
+hashing and an appropriate SolarOS security service, not `random`, for
+security-sensitive values.
 
 Functions that accept file paths use SolarOS shell-style paths. `/` means the default storage mount; internally this resolves to the active storage mount point.
 

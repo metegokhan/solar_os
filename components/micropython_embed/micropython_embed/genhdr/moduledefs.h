@@ -4,6 +4,10 @@ extern const struct _mp_obj_module_t mp_module_array;
 #undef MODULE_DEF_ARRAY
 #define MODULE_DEF_ARRAY { MP_ROM_QSTR(MP_QSTR_array), MP_ROM_PTR(&mp_module_array) },
 
+extern const struct _mp_obj_module_t mp_module_binascii;
+#undef MODULE_DEF_BINASCII
+#define MODULE_DEF_BINASCII { MP_ROM_QSTR(MP_QSTR_binascii), MP_ROM_PTR(&mp_module_binascii) },
+
 extern const struct _mp_obj_module_t mp_module_collections;
 #undef MODULE_DEF_COLLECTIONS
 #define MODULE_DEF_COLLECTIONS { MP_ROM_QSTR(MP_QSTR_collections), MP_ROM_PTR(&mp_module_collections) },
@@ -11,6 +15,18 @@ extern const struct _mp_obj_module_t mp_module_collections;
 extern const struct _mp_obj_module_t mp_module_errno;
 #undef MODULE_DEF_ERRNO
 #define MODULE_DEF_ERRNO { MP_ROM_QSTR(MP_QSTR_errno), MP_ROM_PTR(&mp_module_errno) },
+
+extern const struct _mp_obj_module_t mp_module_hashlib;
+#undef MODULE_DEF_HASHLIB
+#define MODULE_DEF_HASHLIB { MP_ROM_QSTR(MP_QSTR_hashlib), MP_ROM_PTR(&mp_module_hashlib) },
+
+extern const struct _mp_obj_module_t mp_module_json;
+#undef MODULE_DEF_JSON
+#define MODULE_DEF_JSON { MP_ROM_QSTR(MP_QSTR_json), MP_ROM_PTR(&mp_module_json) },
+
+extern const struct _mp_obj_module_t mp_module_random;
+#undef MODULE_DEF_RANDOM
+#define MODULE_DEF_RANDOM { MP_ROM_QSTR(MP_QSTR_random), MP_ROM_PTR(&mp_module_random) },
 
 extern const struct _mp_obj_module_t mp_module_struct;
 #undef MODULE_DEF_STRUCT
@@ -55,12 +71,16 @@ extern const struct _mp_obj_module_t mp_module_sys;
     MODULE_DEF___MAIN__ \
 // MICROPY_REGISTERED_MODULES
 
-#define MICROPY_HAVE_REGISTERED_EXTENSIBLE_MODULES  4
+#define MICROPY_HAVE_REGISTERED_EXTENSIBLE_MODULES  8
 
 #define MICROPY_REGISTERED_EXTENSIBLE_MODULES \
     MODULE_DEF_ARRAY \
+    MODULE_DEF_BINASCII \
     MODULE_DEF_COLLECTIONS \
     MODULE_DEF_ERRNO \
+    MODULE_DEF_HASHLIB \
+    MODULE_DEF_JSON \
+    MODULE_DEF_RANDOM \
     MODULE_DEF_STRUCT \
 // MICROPY_REGISTERED_EXTENSIBLE_MODULES
 
