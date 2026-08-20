@@ -983,7 +983,8 @@ Controls:
 ## notes
 
 Markdown-backed checklist and category manager. It stores unchecked and checked
-items and supports one level of category folding.
+items and supports one level of category folding. A persistent bottom help bar
+shows the available controls, with status or text input directly above it.
 
 Usage:
 
@@ -994,14 +995,17 @@ notes [file.md]
 Controls:
 
 - `Up`/`Down` navigate.
-- `Space` toggles an item.
+- `Space` toggles an item. After an active item is marked done, the selection
+  remains on the next active item when one is available.
 - `a` adds an unchecked item below the selected item. On a category, it adds the
   first item in that category; from the done section, it adds at the end of the
   active items.
 - `c` adds a category.
 - `Enter` edits the selected line.
 - `d` or `Delete` deletes the selected item/category.
-- `Shift+Up`/`Shift+Down` reorders items within a category.
+- `t` tidies the note by deleting all completed items.
+- `Shift+Up`/`Shift+Down` reorders items within a category or moves the selected
+  category together with all of its items.
 - `Left`/`Right` collapse/expand a category.
 - `q`, `Esc`, or app-exit key exits.
 
