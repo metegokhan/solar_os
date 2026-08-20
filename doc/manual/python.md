@@ -30,9 +30,15 @@ solaros.write("SolarOS " + solaros.version() + "\n")
 
 Most mutating functions return `None` on success and raise `OSError("ESP_ERR_...")` on service failure. Query functions return strings, integers, booleans, dictionaries, or lists.
 
-SolarOS uses a size-trimmed MicroPython configuration but includes the standard
-`min()` and `max()` built-ins used by ordinary device scripts. The importable
-runtime modules include `array`, `gc`, `micropython`, and `sys`.
+SolarOS uses MicroPython's size-conscious `EXTRA` language profile. This adds
+common language features such as f-strings, sets, properties, descriptors,
+`enumerate()`, `filter()`, `reversed()`, `memoryview`, and `frozenset`. The
+importable runtime modules are `array`, `cmath`, `collections`, `errno`, `gc`,
+`math`, `micropython`, `struct`, and `sys`.
+
+File-backed imports, `open()`, `input()`, `execfile()`, and upstream `extmod`
+modules remain disabled until they have SolarOS storage, stream, cancellation,
+and ownership integration. Use the typed `solaros` service APIs instead.
 
 Functions that accept file paths use SolarOS shell-style paths. `/` means the default storage mount; internally this resolves to the active storage mount point.
 

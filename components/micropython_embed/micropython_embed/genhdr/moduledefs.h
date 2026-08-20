@@ -4,6 +4,18 @@ extern const struct _mp_obj_module_t mp_module_array;
 #undef MODULE_DEF_ARRAY
 #define MODULE_DEF_ARRAY { MP_ROM_QSTR(MP_QSTR_array), MP_ROM_PTR(&mp_module_array) },
 
+extern const struct _mp_obj_module_t mp_module_collections;
+#undef MODULE_DEF_COLLECTIONS
+#define MODULE_DEF_COLLECTIONS { MP_ROM_QSTR(MP_QSTR_collections), MP_ROM_PTR(&mp_module_collections) },
+
+extern const struct _mp_obj_module_t mp_module_errno;
+#undef MODULE_DEF_ERRNO
+#define MODULE_DEF_ERRNO { MP_ROM_QSTR(MP_QSTR_errno), MP_ROM_PTR(&mp_module_errno) },
+
+extern const struct _mp_obj_module_t mp_module_struct;
+#undef MODULE_DEF_STRUCT
+#define MODULE_DEF_STRUCT { MP_ROM_QSTR(MP_QSTR_struct), MP_ROM_PTR(&mp_module_struct) },
+
 extern const struct _mp_obj_module_t mp_module___main__;
 #undef MODULE_DEF___MAIN__
 #define MODULE_DEF___MAIN__ { MP_ROM_QSTR(MP_QSTR___main__), MP_ROM_PTR(&mp_module___main__) },
@@ -12,9 +24,17 @@ extern const struct _mp_obj_module_t mp_module_builtins;
 #undef MODULE_DEF_BUILTINS
 #define MODULE_DEF_BUILTINS { MP_ROM_QSTR(MP_QSTR_builtins), MP_ROM_PTR(&mp_module_builtins) },
 
+extern const struct _mp_obj_module_t mp_module_cmath;
+#undef MODULE_DEF_CMATH
+#define MODULE_DEF_CMATH { MP_ROM_QSTR(MP_QSTR_cmath), MP_ROM_PTR(&mp_module_cmath) },
+
 extern const struct _mp_obj_module_t mp_module_gc;
 #undef MODULE_DEF_GC
 #define MODULE_DEF_GC { MP_ROM_QSTR(MP_QSTR_gc), MP_ROM_PTR(&mp_module_gc) },
+
+extern const struct _mp_obj_module_t mp_module_math;
+#undef MODULE_DEF_MATH
+#define MODULE_DEF_MATH { MP_ROM_QSTR(MP_QSTR_math), MP_ROM_PTR(&mp_module_math) },
 
 extern const struct _mp_obj_module_t mp_module_micropython;
 #undef MODULE_DEF_MICROPYTHON
@@ -27,16 +47,21 @@ extern const struct _mp_obj_module_t mp_module_sys;
 
 #define MICROPY_REGISTERED_MODULES \
     MODULE_DEF_BUILTINS \
+    MODULE_DEF_CMATH \
     MODULE_DEF_GC \
+    MODULE_DEF_MATH \
     MODULE_DEF_MICROPYTHON \
     MODULE_DEF_SYS \
     MODULE_DEF___MAIN__ \
 // MICROPY_REGISTERED_MODULES
 
-#define MICROPY_HAVE_REGISTERED_EXTENSIBLE_MODULES  1
+#define MICROPY_HAVE_REGISTERED_EXTENSIBLE_MODULES  4
 
 #define MICROPY_REGISTERED_EXTENSIBLE_MODULES \
     MODULE_DEF_ARRAY \
+    MODULE_DEF_COLLECTIONS \
+    MODULE_DEF_ERRNO \
+    MODULE_DEF_STRUCT \
 // MICROPY_REGISTERED_EXTENSIBLE_MODULES
 
 extern void mp_module_sys_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest);

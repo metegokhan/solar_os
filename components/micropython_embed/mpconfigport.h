@@ -2,7 +2,7 @@
 
 #include <port/mpconfigport_common.h>
 
-#define MICROPY_CONFIG_ROM_LEVEL                (MICROPY_CONFIG_ROM_LEVEL_MINIMUM)
+#define MICROPY_CONFIG_ROM_LEVEL                (MICROPY_CONFIG_ROM_LEVEL_EXTRA_FEATURES)
 
 #define MICROPY_ENABLE_COMPILER                 (1)
 #define MICROPY_ENABLE_GC                       (1)
@@ -11,6 +11,34 @@
 #define MICROPY_PERSISTENT_CODE_LOAD            (1)
 #define MICROPY_FLOAT_IMPL                      (MICROPY_FLOAT_IMPL_FLOAT)
 #define MICROPY_GCREGS_SETJMP                  (1)
+
+/* The embed port does not yet provide SolarOS filesystem import/open hooks. */
+#define MICROPY_ENABLE_EXTERNAL_IMPORT          (0)
+#define MICROPY_PY_BUILTINS_EXECFILE            (0)
+#define MICROPY_PY_BUILTINS_INPUT               (0)
+#define MICROPY_PY_IO                           (0)
+#define MICROPY_PY_SYS_STDFILES                 (0)
+
+/* The generated embed package currently vendors py core, not extmod sources. */
+#define MICROPY_PY_ASYNCIO                      (0)
+#define MICROPY_PY_UCTYPES                      (0)
+#define MICROPY_PY_DEFLATE                      (0)
+#define MICROPY_PY_JSON                         (0)
+#define MICROPY_PY_OS                           (0)
+#define MICROPY_PY_RE                           (0)
+#define MICROPY_PY_HEAPQ                        (0)
+#define MICROPY_PY_HASHLIB                      (0)
+#define MICROPY_PY_BINASCII                     (0)
+#define MICROPY_PY_RANDOM                       (0)
+#define MICROPY_PY_SELECT                       (0)
+#define MICROPY_PY_TIME                         (0)
+#define MICROPY_PY_FRAMEBUF                     (0)
+#define MICROPY_PY_PLATFORM                     (0)
+
+/* Networking remains owned by typed SolarOS service bindings. */
+#define MICROPY_PY_LWIP                         (0)
+#define MICROPY_PY_SSL                          (0)
+#define MICROPY_PY_WEBSOCKET                    (0)
 
 #define MICROPY_PY_GC                           (1)
 #define MICROPY_PY_SYS                          (1)
