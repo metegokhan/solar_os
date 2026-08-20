@@ -16,7 +16,10 @@
   storage. Added mirrored, synchronous managed TCP, UDP, WebSocket, and secure
   WebSocket clients with interpreter-owned handles, bounded blocking,
   cancellation checkpoints, automatic teardown, and explicit per-runtime,
-  global, timeout, and transfer limits.
+  global, timeout, and transfer limits. Python and Lua service modules now
+  expand from one package-gated registration descriptor, including aliases,
+  constants, and nested HID tables, so their public APIs cannot drift as typed
+  bindings are extended.
 - **4.8.3** — 2026-08-12 — Gateway Chat now uses the global SolarOS user and
   hostname identity instead of a separate saved username. Added CRC-verified
   NVS backup and restore to disk with `/.solar/nvs.bin` as the default file.

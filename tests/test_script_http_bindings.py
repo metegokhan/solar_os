@@ -5,6 +5,9 @@ from pathlib import Path
 REPOSITORY = Path(__file__).resolve().parents[1]
 PYTHON_SOURCE = (REPOSITORY / "src/apps/solar_os_python.c").read_text(encoding="utf-8")
 LUA_SOURCE = (REPOSITORY / "src/apps/solar_os_lua.c").read_text(encoding="utf-8")
+API_DESCRIPTOR = (REPOSITORY / "src/apps/solar_os_script_api.inc").read_text(
+    encoding="utf-8"
+)
 HTTP_HEADER = (REPOSITORY / "src/services/solar_os_http_client.h").read_text(
     encoding="utf-8"
 )
@@ -16,12 +19,15 @@ HTTP_SOURCE = (REPOSITORY / "src/services/solar_os_http_client.c").read_text(
 class ScriptHttpBindingsTest(unittest.TestCase):
     def test_python_and_lua_register_the_same_http_methods(self):
         for method in ("request", "get", "post", "put", "patch", "delete", "head"):
-            self.assertIn(f'python_module_store(http, "{method}"', PYTHON_SOURCE)
-            self.assertIn(f'solua_set_func(L, mod, "{method}"', LUA_SOURCE)
+            self.assertIn(
+                f"SOLAR_OS_SCRIPT_API_FUNCTION(http, {method}, {method});",
+                API_DESCRIPTOR,
+            )
 
         for source in (PYTHON_SOURCE, LUA_SOURCE):
-            self.assertIn("#if SOLAR_OS_PACKAGE_SERVICE_HTTP_CLIENT", source)
+            self.assertIn('#include "solar_os_script_api.inc"', source)
             self.assertIn("solar_os_http_perform_buffered", source)
+        self.assertIn("#if SOLAR_OS_PACKAGE_SERVICE_HTTP_CLIENT", API_DESCRIPTOR)
 
     def test_python_and_lua_return_the_same_response_fields(self):
         for field in (

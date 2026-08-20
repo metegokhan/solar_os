@@ -1,4 +1,3 @@
-import re
 import unittest
 from pathlib import Path
 
@@ -15,6 +14,9 @@ NET_SOURCE = (REPOSITORY / "src/services/solar_os_net_session.c").read_text(
     encoding="utf-8"
 )
 PACKAGE_SOURCE = (REPOSITORY / "packages/solar_os_packages.toml").read_text(
+    encoding="utf-8"
+)
+API_DESCRIPTOR = (REPOSITORY / "src/apps/solar_os_script_api.inc").read_text(
     encoding="utf-8"
 )
 
@@ -36,18 +38,15 @@ class ScriptNetBindingsTest(unittest.TestCase):
             "limits",
         )
         for method in methods:
-            self.assertRegex(
-                PYTHON_SOURCE,
-                rf'python_module_store\(net,\s*"{re.escape(method)}"',
-            )
-            self.assertRegex(
-                LUA_SOURCE,
-                rf'solua_set_func\(L,\s*mod,\s*"{re.escape(method)}"',
+            self.assertIn(
+                f"SOLAR_OS_SCRIPT_API_FUNCTION(net, {method}, {method});",
+                API_DESCRIPTOR,
             )
 
         for source in (PYTHON_SOURCE, LUA_SOURCE):
-            self.assertIn("#if SOLAR_OS_PACKAGE_SERVICE_NET", source)
+            self.assertIn('#include "solar_os_script_api.inc"', source)
             self.assertIn("solar_os_net_session_", source)
+        self.assertIn("#if SOLAR_OS_PACKAGE_SERVICE_NET", API_DESCRIPTOR)
 
     def test_python_and_lua_return_the_same_message_and_limit_fields(self):
         fields = (
