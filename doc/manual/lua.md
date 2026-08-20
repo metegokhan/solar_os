@@ -54,6 +54,7 @@ service packages are not available on that board.
 - `solaros.sensors`: `environment` when environmental sensor support is compiled
 - `solaros.wifi`: `status`, `status_text`, `start`, `stop`, `connect`, `connect_saved`, `disconnect`, `forget`, `forget_ssid`, `forget_all`, `known`, `scan`, `ap_start`, `ap_stop`, `nat` when Wi-Fi support is compiled
 - `solaros.mqtt`: `status`, `connect`, `disconnect`, `publish`, `subscribe`, `read` when `network.mqtt` is compiled
+- `solaros.http`: `request`, `get`, `post`, `put`, `patch`, `delete`, `head` when `network.http-client` is compiled
 - `solaros.hid`: typed `keyboard`, `mouse`, and `gamepad` tables when `service.hid` is compiled
 - `solaros.gpio`: constants `INPUT`, `OUTPUT`, `PULL_NONE`, `PULL_UP`, `PULL_DOWN`; functions `pins`, `allowed`, `mode`, `configure`, `read`, `write`, `release` when GPIO support is compiled. Pin tables include `expansion`, `allowed`, `available`, `claimed`, `owner`, and `policy` (`free`, `releasable`, or `fixed`).
 - `solaros.onewire`: `allowed`, `reset`, `scan`, `xfer` for the direct-pin compatibility API when OneWire support is compiled
@@ -84,6 +85,39 @@ service packages are not available on that board.
 - `solaros.gfx`: foreground graphics drawing functions
 
 Lua strings are binary-safe, so byte-oriented APIs such as `uart.read`, `i2c.read_reg`, `clipboard.get`, and `mqtt.read().payload` return Lua strings.
+
+### HTTP requests
+
+`solaros.http` uses the shared bounded SolarOS HTTP client. HTTPS uses the
+firmware certificate bundle. The mirrored call forms are:
+
+- `request(method, url[, body[, headers[, timeout_ms[, max_bytes[, follow_redirects]]]]])`
+- `get(url[, headers[, timeout_ms[, max_bytes[, follow_redirects]]]])`
+- `head(url[, headers[, timeout_ms[, max_bytes[, follow_redirects]]]])`
+- `post`, `put`, `patch`, and `delete` use
+  `(url[, body[, headers[, timeout_ms[, max_bytes[, follow_redirects]]]]])`
+
+URLs must use `http://` or `https://`. Headers are a table of up to 16 string
+pairs and 8192 bytes total; names and values cannot contain line breaks.
+Defaults are 10000 ms, a 65536-byte response body, and redirect following. `max_bytes`
+accepts 0 through 262144. The response table contains `status_code`, binary
+`body`, `headers`, `content_length`, `bytes_received`, `duration_ms`,
+`truncated`, and `headers_truncated`. A body over the limit returns its retained
+prefix with `truncated=true`. HTTP 4xx and 5xx statuses are normal responses;
+request, cancellation, deadline, DNS, TLS, and transport failures raise Lua
+errors. Exiting or interrupting Lua cancels an active request.
+
+```lua
+local response = solaros.http.get("https://example.com/")
+print(response.status_code, #response.body)
+
+response = solaros.http.post(
+    "https://example.com/api",
+    '{"state":"online"}',
+    { ["Content-Type"] = "application/json" }
+)
+print(response.status_code, response.body)
+```
 
 A script-driven continuous control uses the same target mappings as an ADC
 potentiometer. Create it from the shell with

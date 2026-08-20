@@ -52,6 +52,7 @@ Optional API groups follow these package gates:
 
 - `service.wifi`: top-level `wifi_status` and `solaros.wifi`
 - `network.mqtt`: `solaros.mqtt`
+- `network.http-client`: `solaros.http`
 - `network.base`: `solaros.net`
 - `network.ssh`: `solaros.ssh_keys`
 - `service.ble`: `solaros.ble`
@@ -284,6 +285,54 @@ while not solaros.should_exit():
     msg = solaros.mqtt.read(1000)
     if msg:
         print(msg["topic"], msg["payload"])
+```
+
+## `solaros.http`
+
+`solaros.http` provides bounded synchronous HTTP and HTTPS requests through the
+shared SolarOS HTTP client. It is present when `network.http-client` is
+compiled. HTTPS uses the firmware certificate bundle; no socket, TLS, or
+upstream MicroPython networking module is exposed.
+
+- `request(method, url[, body[, headers[, timeout_ms[, max_bytes[, follow_redirects]]]]])`
+- `get(url[, headers[, timeout_ms[, max_bytes[, follow_redirects]]]])`
+- `head(url[, headers[, timeout_ms[, max_bytes[, follow_redirects]]]])`
+- `post(url[, body[, headers[, timeout_ms[, max_bytes[, follow_redirects]]]]])`
+- `put(url[, body[, headers[, timeout_ms[, max_bytes[, follow_redirects]]]]])`
+- `patch(url[, body[, headers[, timeout_ms[, max_bytes[, follow_redirects]]]]])`
+- `delete(url[, body[, headers[, timeout_ms[, max_bytes[, follow_redirects]]]]])`
+
+Methods are case-insensitive in `request()`. Request bodies accept text or any
+readable buffer. URLs must use `http://` or `https://`. Headers are a dictionary
+of up to 16 string pairs and 8192 bytes total; names and values cannot contain
+line breaks. The defaults are a 10000 ms end-to-end timeout, a 65536-byte
+response-body limit, and redirect following. `max_bytes` accepts 0 through
+262144; zero collects metadata without retaining a body.
+
+The result is a dictionary containing `status_code`, binary `body`, `headers`,
+`content_length`, `bytes_received`, `duration_ms`, `truncated`, and
+`headers_truncated`. Header names retain the server's spelling and duplicate
+names use the last received value. `content_length` is `-1` when the server did
+not supply it. When a body exceeds `max_bytes`, SolarOS stops that response,
+returns the retained prefix, and sets `truncated=True`.
+
+HTTP error statuses such as 404 and 500 are normal results. Invalid requests,
+allocation failures, cancellation, deadlines, DNS failures, and transport
+errors raise `OSError("ESP_ERR_...")`. Exiting the Python app cancels an active
+request.
+
+```python
+import solaros
+
+response = solaros.http.get("https://example.com/")
+print(response["status_code"], len(response["body"]))
+
+response = solaros.http.post(
+    "https://example.com/api",
+    b'{"state":"online"}',
+    {"Content-Type": "application/json"},
+)
+print(response["status_code"], response["body"])
 ```
 
 ## `solaros.gpio`

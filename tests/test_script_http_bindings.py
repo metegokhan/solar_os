@@ -1,0 +1,50 @@
+import unittest
+from pathlib import Path
+
+
+REPOSITORY = Path(__file__).resolve().parents[1]
+PYTHON_SOURCE = (REPOSITORY / "src/apps/solar_os_python.c").read_text(encoding="utf-8")
+LUA_SOURCE = (REPOSITORY / "src/apps/solar_os_lua.c").read_text(encoding="utf-8")
+HTTP_HEADER = (REPOSITORY / "src/services/solar_os_http_client.h").read_text(
+    encoding="utf-8"
+)
+HTTP_SOURCE = (REPOSITORY / "src/services/solar_os_http_client.c").read_text(
+    encoding="utf-8"
+)
+
+
+class ScriptHttpBindingsTest(unittest.TestCase):
+    def test_python_and_lua_register_the_same_http_methods(self):
+        for method in ("request", "get", "post", "put", "patch", "delete", "head"):
+            self.assertIn(f'python_module_store(http, "{method}"', PYTHON_SOURCE)
+            self.assertIn(f'solua_set_func(L, mod, "{method}"', LUA_SOURCE)
+
+        for source in (PYTHON_SOURCE, LUA_SOURCE):
+            self.assertIn("#if SOLAR_OS_PACKAGE_SERVICE_HTTP_CLIENT", source)
+            self.assertIn("solar_os_http_perform_buffered", source)
+
+    def test_python_and_lua_return_the_same_response_fields(self):
+        for field in (
+            "status_code",
+            "content_length",
+            "bytes_received",
+            "duration_ms",
+            "truncated",
+            "headers_truncated",
+            "headers",
+            "body",
+        ):
+            self.assertIn(f'"{field}"', PYTHON_SOURCE)
+            self.assertIn(f'"{field}"', LUA_SOURCE)
+
+    def test_buffered_client_is_bounded_and_cancellation_aware(self):
+        self.assertIn("SOLAR_OS_HTTP_BUFFERED_DEFAULT_MAX_BODY", HTTP_HEADER)
+        self.assertIn("SOLAR_OS_HTTP_BUFFERED_MAX_BODY", HTTP_HEADER)
+        self.assertIn("solar_os_http_cancel_fn", HTTP_HEADER)
+        self.assertIn("request->options.should_cancel", HTTP_SOURCE)
+        self.assertIn("response->body_truncated = true", HTTP_SOURCE)
+        self.assertIn("response->headers_truncated = true", HTTP_SOURCE)
+
+
+if __name__ == "__main__":
+    unittest.main()
