@@ -103,7 +103,7 @@ static void audio_print_gain(solar_os_shell_io_t *term, float gain_db)
 void solar_os_shell_cmd_board(solar_os_context_t *ctx, int argc, char **argv)
 {
     solar_os_shell_io_t *term = terminal(ctx);
-    char caps[192];
+    char caps[SOLAR_OS_BOARD_CAPABILITIES_TEXT_MAX];
 
     (void)argv;
 

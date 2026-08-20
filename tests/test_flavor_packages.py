@@ -166,6 +166,9 @@ class FlavorPackagesTest(unittest.TestCase):
             "job_bridge",
             "job_daq",
             "job_sump",
+            "service_script_net",
+            "app_python",
+            "app_lua",
             "app_clock",
             "app_calc",
             "app_plot",
@@ -355,6 +358,7 @@ class FlavorPackagesTest(unittest.TestCase):
             {
                 "app_invaders",
                 "service_playground",
+                "service_script_net",
                 "service_script_runner",
                 "app_python",
                 "app_playground",
@@ -368,6 +372,7 @@ class FlavorPackagesTest(unittest.TestCase):
             {
                 "app_invaders",
                 "service_playground",
+                "service_script_net",
                 "service_script_runner",
                 "app_lua",
                 "app_playground",

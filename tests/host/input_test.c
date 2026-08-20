@@ -133,6 +133,27 @@ int main(void)
     event = read_one_event();
     assert(event.action == SOLAR_OS_INPUT_KEY_RELEASE);
 
+    now_us = 500000;
+    assert(solar_os_input_write_key(keyboard,
+                                    0x28,
+                                    0x28,
+                                    SOLAR_OS_KEY_ENTER,
+                                    0,
+                                    SOLAR_OS_INPUT_KEY_PRESS) == ESP_OK);
+    event = read_one_event();
+    assert(event.action == SOLAR_OS_INPUT_KEY_PRESS);
+    assert(event.key == SOLAR_OS_KEY_ENTER);
+    now_us = 1000000;
+    assert(solar_os_input_read_events(&event, 1) == 0);
+    assert(solar_os_input_write_key(keyboard,
+                                    0x28,
+                                    0x28,
+                                    SOLAR_OS_KEY_ENTER,
+                                    0,
+                                    SOLAR_OS_INPUT_KEY_RELEASE) == ESP_OK);
+    event = read_one_event();
+    assert(event.action == SOLAR_OS_INPUT_KEY_RELEASE);
+
     assert(solar_os_input_write_key(keyboard,
                                     0x2b,
                                     0x2b,

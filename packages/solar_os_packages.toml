@@ -386,6 +386,13 @@ sources = ["services/solar_os_net.c"]
 requires = ["lwip"]
 capabilities = ["wifi"]
 
+[packages.service_script_net]
+label = "service.script-network"
+depends = ["service_net"]
+sources = ["services/solar_os_net_session.c"]
+requires = ["esp-tls", "esp_timer", "lwip", "mbedtls", "tcp_transport"]
+capabilities = ["wifi"]
+
 [packages.service_mqtt]
 label = "network.mqtt"
 depends = ["service_wifi"]
@@ -1016,14 +1023,14 @@ capabilities = ["gfx", "psram", "sd"]
 
 [packages.app_python]
 label = "app.python"
-depends = ["service_messaging", "service_script_runner"]
+depends = ["service_messaging", "service_script_net", "service_script_runner"]
 sources = ["apps/solar_os_python.c"]
 requires = ["micropython_embed"]
 capabilities = ["psram"]
 
 [packages.app_lua]
 label = "app.lua"
-depends = ["service_messaging", "service_script_runner"]
+depends = ["service_messaging", "service_script_net", "service_script_runner"]
 sources = ["apps/solar_os_lua.c"]
 requires = ["lua"]
 capabilities = ["psram"]

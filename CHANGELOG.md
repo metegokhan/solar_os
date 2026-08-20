@@ -2,6 +2,35 @@
 
 ## 4.x
 
+- **4.8.4** — 2026-08-20 — MicroPython embed generation is pinned and
+  reproducible, including the SolarOS qstr and port overrides. Python now uses
+  the port-compatible `EXTRA` language profile, with f-strings, sets,
+  properties, descriptors, additional built-ins, and the `array`, `cmath`,
+  `collections`, `errno`, `math`, and `struct` modules. Added mirrored,
+  cancellation-aware `solaros.http` Python and Lua bindings for bounded HTTP
+  GET, POST, PUT, PATCH, DELETE, HEAD, redirects, headers, and binary bodies.
+  Added the selected `json`, `binascii`, `hashlib`, and `random` standard
+  modules, including SHA-256 and hardware-seeded non-cryptographic randomness.
+  Added SolarOS-backed `open()` text and binary streams plus external `.py`,
+  `.mpy`, and package imports rooted at the script directory or preferred
+  storage. Added mirrored, synchronous managed TCP, UDP, WebSocket, and secure
+  WebSocket clients with interpreter-owned handles, bounded blocking,
+  cancellation checkpoints, automatic teardown, and explicit per-runtime,
+  global, timeout, and transfer limits. Python and Lua service modules now
+  expand from one package-gated registration descriptor, including aliases,
+  constants, and nested HID tables, so their public APIs cannot drift as typed
+  bindings are extended. Native Agent scripting lookups now search bounded,
+  task-specific sections of the complete firmware-matched Python and Lua
+  manuals, with generated zero-copy indexes and retrieval coverage for every
+  shared service. MicroPython now initializes the `EXTRA` profile's C-stack
+  limit from the current FreeRTOS task, restoring REPL and Agent script
+  execution while preserving recursion-depth protection. Native signed and
+  unsigned 64-bit values that fit MicroPython's immediate integer range now
+  convert without requiring long-integer support, restoring `solaros.http`
+  response dictionaries, `solaros.uptime_ms()`, and small DSP dot products.
+  Board capability output now uses one checked capacity and includes the full
+  Waveshare sensor list. Enter no longer key-repeats, preventing a short Python
+  app from submitting an empty command after it returns to the shell prompt.
 - **4.8.3** — 2026-08-12 — Gateway Chat now uses the global SolarOS user and
   hostname identity instead of a separate saved username. Added CRC-verified
   NVS backup and restore to disk with `/.solar/nvs.bin` as the default file.
