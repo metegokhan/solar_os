@@ -3,7 +3,7 @@ CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror
 
 ROOT := ../..
 WRITER_DIR := $(ROOT)/src/apps
-TARGETS := writer_buffer_test writer_files_test doc_layout_test shell_parse_test shell_launch_test app_file_types_test gameboy_support_test storage_mounts_test keys_test input_test hid_keyboard_report_test ps2_keyboard_test midi_codec_test parameters_test controls_test dsp_test stream_test audio_codec_test webradio_catalog_test nvs_backup_test agent_reference_test
+TARGETS := writer_buffer_test writer_files_test doc_layout_test shell_parse_test shell_launch_test app_file_types_test gameboy_support_test storage_mounts_test keys_test input_test board_caps_test hid_keyboard_report_test ps2_keyboard_test midi_codec_test parameters_test controls_test dsp_test stream_test audio_codec_test webradio_catalog_test nvs_backup_test agent_reference_test
 
 MANUAL_GENERATED_DIR := generated/solar_os
 MANUAL_GENERATED_HEADER := $(MANUAL_GENERATED_DIR)/solar_os_manual_data.h
@@ -59,6 +59,27 @@ keys_test: keys_test.c $(ROOT)/src/services/solar_os_keys.c $(ROOT)/src/services
 input_test: input_test.c $(ROOT)/src/services/solar_os_input.c $(ROOT)/src/services/solar_os_input.h esp_timer.h nvs.h freertos/FreeRTOS.h
 	$(CC) $(CFLAGS) -include compat.h -I. -I$(ROOT)/src/services \
 		input_test.c $(ROOT)/src/services/solar_os_input.c -o $@
+
+board_caps_test: board_caps_test.c $(ROOT)/src/services/solar_os_board_caps.c $(ROOT)/src/services/solar_os_board_caps.h solar_os_board.h
+	$(CC) $(CFLAGS) -I. -I$(ROOT)/src/services \
+		-DSOLAR_OS_BOARD_HAS_PSRAM=1 -DSOLAR_OS_BOARD_HAS_DISPLAY=1 \
+		-DSOLAR_OS_BOARD_HAS_GFX=1 -DSOLAR_OS_BOARD_HAS_CDC=1 \
+		-DSOLAR_OS_BOARD_HAS_UART=1 -DSOLAR_OS_BOARD_HAS_I2C=1 \
+		-DSOLAR_OS_BOARD_HAS_SPI=1 -DSOLAR_OS_BOARD_HAS_RTC=1 \
+		-DSOLAR_OS_BOARD_HAS_BATTERY=1 -DSOLAR_OS_BOARD_HAS_AUDIO=1 \
+		-DSOLAR_OS_BOARD_HAS_AUDIO_INPUT=1 -DSOLAR_OS_BOARD_HAS_WIFI=1 \
+		-DSOLAR_OS_BOARD_HAS_BLE=1 -DSOLAR_OS_BOARD_HAS_GPIO=1 \
+		-DSOLAR_OS_BOARD_HAS_ADC=1 -DSOLAR_OS_BOARD_HAS_PWM=1 \
+		-DSOLAR_OS_BOARD_HAS_EXPANSION_GPIO=1 \
+		-DSOLAR_OS_BOARD_HAS_EXPANSION_I2C=1 \
+		-DSOLAR_OS_BOARD_HAS_EXPANSION_SPI=1 \
+		-DSOLAR_OS_BOARD_HAS_EXPANSION_UART=1 \
+		-DSOLAR_OS_BOARD_HAS_EXPANSION_ADC=1 \
+		-DSOLAR_OS_BOARD_HAS_EXPANSION_PWM=1 \
+		-DSOLAR_OS_BOARD_HAS_EXPANSION_I2S=1 -DSOLAR_OS_BOARD_HAS_KEY=1 \
+		-DSOLAR_OS_BOARD_HAS_TEMPERATURE=1 \
+		-DSOLAR_OS_BOARD_HAS_HUMIDITY=1 -DSOLAR_OS_BOARD_HAS_SIMD=1 \
+		board_caps_test.c $(ROOT)/src/services/solar_os_board_caps.c -o $@
 
 hid_keyboard_report_test: hid_keyboard_report_test.c $(ROOT)/src/services/solar_os_hid_keyboard_report.c $(ROOT)/src/services/solar_os_hid_keyboard_report.h
 	$(CC) $(CFLAGS) -I$(ROOT)/src/services \
@@ -124,6 +145,7 @@ test: $(TARGETS)
 	./storage_mounts_test
 	./keys_test
 	./input_test
+	./board_caps_test
 	./hid_keyboard_report_test
 	./ps2_keyboard_test
 	./midi_codec_test

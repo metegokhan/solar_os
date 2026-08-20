@@ -2810,7 +2810,7 @@ static esp_err_t agent_tool_hardware_describe(
     (void)root;
     solar_os_json_free(doc);
 
-    char capabilities[384];
+    char capabilities[SOLAR_OS_BOARD_CAPABILITIES_TEXT_MAX];
     char escaped_capabilities[sizeof(capabilities) *
                               AGENT_TOOL_JSON_ESCAPE_FACTOR + 1U];
     solar_os_board_capabilities_format(capabilities, sizeof(capabilities));

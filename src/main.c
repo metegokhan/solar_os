@@ -241,7 +241,7 @@ static void print_boot_summary(void)
                   (unsigned)heap_caps_get_total_size(MALLOC_CAP_SPIRAM));
 #endif
 
-    char caps[192];
+    char caps[SOLAR_OS_BOARD_CAPABILITIES_TEXT_MAX];
     solar_os_board_capabilities_format(caps, sizeof(caps));
     SOLAR_OS_LOGI(TAG, "Board capabilities: %s", caps);
 

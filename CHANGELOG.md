@@ -28,6 +28,9 @@
   unsigned 64-bit values that fit MicroPython's immediate integer range now
   convert without requiring long-integer support, restoring `solaros.http`
   response dictionaries, `solaros.uptime_ms()`, and small DSP dot products.
+  Board capability output now uses one checked capacity and includes the full
+  Waveshare sensor list. Enter no longer key-repeats, preventing a short Python
+  app from submitting an empty command after it returns to the shell prompt.
 - **4.8.3** — 2026-08-12 — Gateway Chat now uses the global SolarOS user and
   hostname identity instead of a separate saved username. Added CRC-verified
   NVS backup and restore to disk with `/.solar/nvs.bin` as the default file.
