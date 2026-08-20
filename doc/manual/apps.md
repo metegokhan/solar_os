@@ -329,10 +329,11 @@ Graphical controls:
 
 ## chat
 
-Two-pane provider-neutral conversation client. The left pane lists gateway and
-radio conversations, the right pane shows bounded shared history, and the
-bottom line is the message/command input. It opens and remains useful offline;
-network or radio transport jobs connect independently.
+Tabbed provider-neutral conversation client. The Channels tab lists gateway and
+radio conversations. Enter selects a conversation and opens its bounded shared
+history on the Chat tab, which also contains the message/command input. The app
+opens and remains useful offline; network or radio transport jobs connect
+independently.
 
 Usage:
 
@@ -364,7 +365,8 @@ and reconnects with exponential backoff while remaining in the running state.
 Gateway setup and room lifecycle use `gateway status`, `gateway configure`,
 `gateway connect`, `gateway disconnect`, `gateway rooms`, `gateway join`,
 `gateway leave`, and `gateway delete`. Gateway synchronization runs only under
-the `gateway-sync` job name.
+the `gateway-sync` job name. Selecting a known gateway room in the Channels tab
+joins it automatically before opening the conversation.
 
 Conversation rows show provider, unread, and security state. Outbound rows show
 queued/sending/sent/delivered/failed state. Use `/new CONTACT_ID` to open a
@@ -387,9 +389,10 @@ In-app commands:
 
 Controls:
 
-- `Tab` changes focus between conversation list, messages, and input.
-- `Up`/`Down` navigate the focused pane or input history.
-- `Enter` sends input or opens the selected conversation.
+- `Tab` switches between the Channels and Chat tabs.
+- In Channels, `Up`/`Down` select a conversation and `Enter` joins a known
+  gateway room if necessary, then opens the Chat tab.
+- In Chat, `Up`/`Down` navigate input history and `Enter` sends input.
 - `Page Up`/`Page Down` scroll messages.
 - `Esc` or app-exit key exits.
 
