@@ -41,7 +41,7 @@ static gameboy_audio_state_t *gameboy_audio_state;
 static esp_err_t gameboy_audio_ensure_mutex(void) {
   if (gameboy_audio_state == NULL) {
     gameboy_audio_state = solar_os_memory_calloc(
-        1U, sizeof(*gameboy_audio_state), SOLAR_OS_MEMORY_INTERNAL_CRITICAL,
+        1U, sizeof(*gameboy_audio_state), SOLAR_OS_MEMORY_EXTERNAL_PREFERRED,
         "gameboy.audio");
     if (gameboy_audio_state == NULL) {
       return ESP_ERR_NO_MEM;
@@ -70,27 +70,38 @@ static void gameboy_audio_unlock(void) {
 static void gameboy_audio_render(int16_t *samples, size_t frames,
                                  uint32_t sample_rate, void *user) {
   (void)user;
-  if (gameboy_audio_state == NULL || samples == NULL || frames != AUDIO_SAMPLES ||
-      sample_rate != AUDIO_SAMPLE_RATE || !gameboy_apu_initialized) {
+  (void)sample_rate;
+  if (gameboy_audio_state == NULL || samples == NULL ||
+      !gameboy_apu_initialized) {
     return;
   }
   gameboy_audio_lock();
   minigb_apu_audio_callback(&gameboy_apu, samples);
   gameboy_audio_unlock();
+
+  /* Boost Game Boy audio by 4x for loud, full dynamic range */
+  for (size_t i = 0; i < frames * 2; i++) {
+    int32_t s = (int32_t)samples[i] * 4;
+    if (s > 32767) s = 32767;
+    else if (s < -32768) s = -32768;
+    samples[i] = (int16_t)s;
+  }
 }
 
 esp_err_t solar_os_gameboy_audio_resume(void) {
   if (gameboy_audio_state == NULL || !gameboy_apu_initialized) {
     return ESP_ERR_INVALID_STATE;
   }
-  if (gameboy_apu_running) {
-    solar_os_synth_status_t status;
-    solar_os_synth_get_status(&status);
-    if (status.running && strcmp(status.owner, GAMEBOY_AUDIO_OWNER) == 0) {
+  solar_os_synth_status_t status;
+  solar_os_synth_get_status(&status);
+  if (status.running) {
+    if (strcmp(status.owner, GAMEBOY_AUDIO_OWNER) == 0) {
+      gameboy_apu_running = true;
       return ESP_OK;
     }
-    gameboy_apu_running = false;
+    (void)solar_os_synth_stop(NULL);
   }
+  gameboy_apu_running = false;
   const solar_os_synth_config_t config = {
       .owner = GAMEBOY_AUDIO_OWNER,
       .render = gameboy_audio_render,
