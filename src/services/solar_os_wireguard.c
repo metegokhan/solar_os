@@ -28,6 +28,8 @@
 #include "nvs.h"
 #include "solar_os_log.h"
 #include "solar_os_lwip_route.h"
+#include "solar_os_memory.h"
+#include "solar_os_task.h"
 #include "solar_os_time.h"
 #include "solar_os_wifi.h"
 #include "wireguard.h"
@@ -88,6 +90,9 @@ typedef struct {
 typedef struct {
     SemaphoreHandle_t mutex;
     TaskHandle_t worker;
+    wireguard_profile_store_t *active_profile;
+    bool worker_stop_requested;
+    volatile bool worker_done;
     bool initialized;
     bool configured;
     bool desired_up;
@@ -121,6 +126,8 @@ typedef struct {
 
 static wireguard_service_t wireguard_service;
 static const struct wireguardif_init_data *wireguard_pending_init_data;
+
+static void wireguard_worker(void *argument);
 
 static void wireguard_lock(void)
 {
@@ -300,6 +307,58 @@ static esp_err_t wireguard_profile_load(wireguard_profile_store_t *profile)
         crypto_zero(profile, sizeof(*profile));
     }
     return error;
+}
+
+static esp_err_t wireguard_active_profile_prepare(void)
+{
+    wireguard_lock();
+    const bool prepared = wireguard_service.active_profile != NULL;
+    wireguard_unlock();
+    if (prepared) {
+        return ESP_OK;
+    }
+
+    wireguard_profile_store_t *profile = solar_os_memory_calloc(
+        1U,
+        sizeof(*profile),
+        SOLAR_OS_MEMORY_EXTERNAL_PREFERRED,
+        "wireguard.profile");
+    if (profile == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    const esp_err_t error = wireguard_profile_load(profile);
+    if (error != ESP_OK) {
+        crypto_zero(profile, sizeof(*profile));
+        solar_os_memory_free(profile);
+        return error;
+    }
+
+    wireguard_lock();
+    if (wireguard_service.active_profile == NULL) {
+        wireguard_service.active_profile = profile;
+        profile = NULL;
+    }
+    wireguard_unlock();
+
+    if (profile != NULL) {
+        crypto_zero(profile, sizeof(*profile));
+        solar_os_memory_free(profile);
+    }
+    return ESP_OK;
+}
+
+static void wireguard_active_profile_clear(void)
+{
+    wireguard_lock();
+    wireguard_profile_store_t *profile = wireguard_service.active_profile;
+    wireguard_service.active_profile = NULL;
+    wireguard_unlock();
+
+    if (profile != NULL) {
+        crypto_zero(profile, sizeof(*profile));
+        solar_os_memory_free(profile);
+    }
 }
 
 static esp_err_t wireguard_profile_save(const wireguard_profile_store_t *profile)
@@ -994,17 +1053,18 @@ static void wireguard_start_tcpip(void *argument)
 static esp_err_t wireguard_start_runtime(void)
 {
     wireguard_profile_store_t profile;
-    esp_err_t error = wireguard_profile_load(&profile);
-    if (error != ESP_OK) {
-        return error;
-    }
-
     wireguard_lock();
+    if (wireguard_service.active_profile == NULL) {
+        wireguard_unlock();
+        return ESP_ERR_INVALID_STATE;
+    }
+    profile = *wireguard_service.active_profile;
     wireguard_service.state = SOLAR_OS_WIREGUARD_STATE_RESOLVING;
     const solar_os_wireguard_policy_t policy = wireguard_service.policy;
     ip4_addr_t cached_endpoint = wireguard_service.endpoint_ip;
     wireguard_unlock();
 
+    esp_err_t error = ESP_OK;
     ip4_addr_t endpoint_ip = cached_endpoint;
     if (endpoint_ip.addr == 0U) {
         error = wireguard_resolve_endpoint(profile.endpoint, &endpoint_ip);
@@ -1075,6 +1135,7 @@ static void wireguard_worker(void *argument)
         (void)ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(500U));
 
         wireguard_lock();
+        const bool stop_requested = wireguard_service.worker_stop_requested;
         const bool should_run = wireguard_service.desired_up &&
             !wireguard_service.suspended && wireguard_service.wifi_has_ip;
         const bool runtime_active = wireguard_service.runtime_active;
@@ -1082,6 +1143,9 @@ static void wireguard_worker(void *argument)
         const bool retry_due = wireguard_service.last_retry_ms == 0U ||
             (now_ms - wireguard_service.last_retry_ms) >= WIREGUARD_RETRY_MS;
         wireguard_unlock();
+        if (stop_requested) {
+            break;
+        }
 
         if (should_run && !runtime_active && retry_due) {
             wireguard_lock();
@@ -1089,28 +1153,108 @@ static void wireguard_worker(void *argument)
             wireguard_unlock();
             const esp_err_t error = wireguard_start_runtime();
             wireguard_lock();
-            wireguard_service.last_error = error;
-            wireguard_service.state = error == ESP_OK ?
-                SOLAR_OS_WIREGUARD_STATE_CONNECTING :
-                SOLAR_OS_WIREGUARD_STATE_ERROR;
+            const bool still_requested = !wireguard_service.worker_stop_requested &&
+                wireguard_service.desired_up && !wireguard_service.suspended;
+            if (still_requested) {
+                wireguard_service.last_error = error;
+                wireguard_service.state = error == ESP_OK ?
+                    SOLAR_OS_WIREGUARD_STATE_CONNECTING :
+                    SOLAR_OS_WIREGUARD_STATE_ERROR;
+            }
             wireguard_unlock();
         }
 
         wireguard_lock();
-        const bool poll = wireguard_service.runtime_active;
+        const bool stop_before_poll = wireguard_service.worker_stop_requested;
+        const bool poll = !stop_before_poll && wireguard_service.runtime_active;
         wireguard_unlock();
+        if (stop_before_poll) {
+            break;
+        }
         if (poll) {
             bool peer_up = false;
             if (tcpip_callback_wait(wireguard_poll_peer, &peer_up) == ERR_OK) {
                 wireguard_lock();
-                wireguard_service.peer_up = peer_up;
-                wireguard_service.state = peer_up ?
-                    SOLAR_OS_WIREGUARD_STATE_UP :
-                    SOLAR_OS_WIREGUARD_STATE_CONNECTING;
+                if (!wireguard_service.worker_stop_requested) {
+                    wireguard_service.peer_up = peer_up;
+                    wireguard_service.state = peer_up ?
+                        SOLAR_OS_WIREGUARD_STATE_UP :
+                        SOLAR_OS_WIREGUARD_STATE_CONNECTING;
+                }
                 wireguard_unlock();
             }
         }
     }
+
+    wireguard_lock();
+    wireguard_service.worker_done = true;
+    wireguard_unlock();
+    solar_os_task_delete_external(NULL);
+}
+
+static esp_err_t wireguard_worker_start(void)
+{
+    wireguard_lock();
+    if (wireguard_service.worker != NULL) {
+        const esp_err_t error = wireguard_service.worker_stop_requested ?
+            ESP_ERR_INVALID_STATE : ESP_OK;
+        wireguard_unlock();
+        return error;
+    }
+
+    wireguard_service.worker_stop_requested = false;
+    wireguard_service.worker_done = false;
+    /* This worker owns no flash operations. The NVS profile is loaded by the
+     * caller before launch, so its stack can use PSRAM safely. */
+    const BaseType_t created = solar_os_task_create_pinned_external(
+        wireguard_worker,
+        "wireguard",
+        WIREGUARD_WORKER_STACK,
+        NULL,
+        WIREGUARD_WORKER_PRIORITY,
+        &wireguard_service.worker,
+        tskNO_AFFINITY,
+        SOLAR_OS_TASK_ROLE_SYSTEM);
+    if (created != pdPASS) {
+        wireguard_service.worker = NULL;
+        wireguard_service.worker_done = true;
+    }
+    wireguard_unlock();
+    return created == pdPASS ? ESP_OK : ESP_ERR_NO_MEM;
+}
+
+static esp_err_t wireguard_worker_stop(void)
+{
+    wireguard_lock();
+    TaskHandle_t worker = wireguard_service.worker;
+    if (worker != NULL && !wireguard_service.worker_stop_requested) {
+        wireguard_service.worker_stop_requested = true;
+        /* Keep the mutex until the notification is sent. The worker cannot
+         * observe the stop request and self-delete while its handle is used. */
+        xTaskNotifyGive(worker);
+    }
+    wireguard_unlock();
+
+    if (worker == NULL) {
+        return ESP_OK;
+    }
+    if (!solar_os_task_wait_done(worker,
+                                 &wireguard_service.worker_done,
+                                 SOLAR_OS_TASK_STOP_WAIT_MS)) {
+        SOLAR_OS_LOGE(TAG,
+                      "worker did not stop within %u ms",
+                      (unsigned)SOLAR_OS_TASK_STOP_WAIT_MS);
+        return ESP_ERR_TIMEOUT;
+    }
+
+    wireguard_lock();
+    if (wireguard_service.worker == worker) {
+        wireguard_service.worker = NULL;
+    }
+    wireguard_service.worker_stop_requested = false;
+    wireguard_service.worker_done = false;
+    wireguard_unlock();
+    return ESP_OK;
 }
 
 static void wireguard_handle_wifi_lost(void)
@@ -1165,9 +1309,13 @@ static void wireguard_network_event(void *argument,
                 return;
             }
         }
-        if (wake && wireguard_service.worker != NULL) {
+        wireguard_lock();
+        if (wireguard_service.desired_up && !wireguard_service.suspended &&
+            wireguard_service.wifi_has_ip && wireguard_service.worker != NULL &&
+            !wireguard_service.worker_stop_requested) {
             xTaskNotifyGive(wireguard_service.worker);
         }
+        wireguard_unlock();
     } else if (event_id == IP_EVENT_STA_LOST_IP) {
         wireguard_handle_wifi_lost();
     }
@@ -1236,14 +1384,6 @@ esp_err_t solar_os_wireguard_init(void)
     solar_os_wifi_status_t wifi;
     solar_os_wifi_get_status(&wifi);
     wireguard_service.wifi_has_ip = wifi.has_ip;
-    if (xTaskCreate(wireguard_worker,
-                    "wireguard",
-                    WIREGUARD_WORKER_STACK,
-                    NULL,
-                    WIREGUARD_WORKER_PRIORITY,
-                    &wireguard_service.worker) != pdPASS) {
-        return ESP_ERR_NO_MEM;
-    }
     wireguard_service.initialized = true;
     return ESP_OK;
 }
@@ -1260,7 +1400,8 @@ esp_err_t solar_os_wireguard_import(const char *path, char *detail, size_t detai
         }
     }
     wireguard_lock();
-    const bool busy = wireguard_service.desired_up || wireguard_service.runtime_active;
+    const bool busy = wireguard_service.desired_up ||
+        wireguard_service.runtime_active || wireguard_service.worker != NULL;
     wireguard_unlock();
     if (busy) {
         wireguard_set_detail(detail, detail_len, 0U, "bring the tunnel down before import");
@@ -1301,7 +1442,8 @@ esp_err_t solar_os_wireguard_forget(void)
         }
     }
     wireguard_lock();
-    const bool busy = wireguard_service.desired_up || wireguard_service.runtime_active;
+    const bool busy = wireguard_service.desired_up ||
+        wireguard_service.runtime_active || wireguard_service.worker != NULL;
     wireguard_unlock();
     if (busy) {
         return ESP_ERR_INVALID_STATE;
@@ -1343,6 +1485,22 @@ esp_err_t solar_os_wireguard_up(solar_os_wireguard_policy_t policy)
         wireguard_unlock();
         return ESP_ERR_INVALID_ARG;
     }
+    const bool had_active_profile = wireguard_service.active_profile != NULL;
+    wireguard_unlock();
+
+    esp_err_t error = wireguard_active_profile_prepare();
+    if (error != ESP_OK) {
+        return error;
+    }
+    error = wireguard_worker_start();
+    if (error != ESP_OK) {
+        if (!had_active_profile) {
+            wireguard_active_profile_clear();
+        }
+        return error;
+    }
+
+    wireguard_lock();
     wireguard_service.policy = policy;
     wireguard_service.desired_up = true;
     wireguard_service.suspended = false;
@@ -1362,12 +1520,19 @@ esp_err_t solar_os_wireguard_up(solar_os_wireguard_policy_t policy)
             wireguard_service.state = SOLAR_OS_WIREGUARD_STATE_ERROR;
             wireguard_service.last_error = filter_error;
             wireguard_unlock();
+            if (wireguard_worker_stop() == ESP_OK) {
+                wireguard_active_profile_clear();
+            }
             return filter_error;
         }
     }
-    if (notify && wireguard_service.worker != NULL) {
+    wireguard_lock();
+    if (wireguard_service.desired_up && wireguard_service.wifi_has_ip &&
+        wireguard_service.worker != NULL &&
+        !wireguard_service.worker_stop_requested) {
         xTaskNotifyGive(wireguard_service.worker);
     }
+    wireguard_unlock();
     return ESP_OK;
 }
 
@@ -1380,12 +1545,19 @@ esp_err_t solar_os_wireguard_down(void)
     wireguard_service.desired_up = false;
     wireguard_service.suspended = false;
     wireguard_unlock();
+    const esp_err_t worker_error = wireguard_worker_stop();
     const err_t error = tcpip_callback_wait(wireguard_stop_tcpip, NULL);
+    if (worker_error == ESP_OK) {
+        wireguard_active_profile_clear();
+    }
     wireguard_lock();
-    wireguard_service.state = SOLAR_OS_WIREGUARD_STATE_OFF;
-    wireguard_service.last_error = error == ERR_OK ? ESP_OK : ESP_FAIL;
+    const esp_err_t result = worker_error != ESP_OK ? worker_error :
+        (error == ERR_OK ? ESP_OK : ESP_FAIL);
+    wireguard_service.state = result == ESP_OK ?
+        SOLAR_OS_WIREGUARD_STATE_OFF : SOLAR_OS_WIREGUARD_STATE_ERROR;
+    wireguard_service.last_error = result;
     wireguard_unlock();
-    return error == ERR_OK ? ESP_OK : ESP_FAIL;
+    return result;
 }
 
 esp_err_t solar_os_wireguard_prepare_sleep(void)
@@ -1424,10 +1596,11 @@ esp_err_t solar_os_wireguard_resume(void)
             SOLAR_OS_WIREGUARD_STATE_WAIT_WIFI;
         wireguard_service.last_retry_ms = 0U;
     }
-    wireguard_unlock();
-    if (notify && wireguard_service.worker != NULL) {
+    if (notify && wireguard_service.worker != NULL &&
+        !wireguard_service.worker_stop_requested) {
         xTaskNotifyGive(wireguard_service.worker);
     }
+    wireguard_unlock();
     return ESP_OK;
 }
 

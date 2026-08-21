@@ -755,6 +755,14 @@ static void enter_light_sleep(const char *reason)
         }
     }
 #endif
+#if SOLAR_OS_PACKAGE_SERVICE_BLE
+    if (board_has(SOLAR_OS_BOARD_CAP_BLE)) {
+        if (solar_os_ble_keyboard_enabled_for_current_boot()) {
+            solar_os_ble_keyboard_resume();
+            radio_resumed = true;
+        }
+    }
+#endif
 #if SOLAR_OS_PACKAGE_SERVICE_WIREGUARD
     const esp_err_t wireguard_resume_err = solar_os_wireguard_resume();
     if (wireguard_resume_err != ESP_OK) {
@@ -769,14 +777,6 @@ static void enter_light_sleep(const char *reason)
         SOLAR_OS_LOGW(TAG,
                       "ESP-NOW resume failed: %s",
                       esp_err_to_name(espnow_resume_err));
-    }
-#endif
-#if SOLAR_OS_PACKAGE_SERVICE_BLE
-    if (board_has(SOLAR_OS_BOARD_CAP_BLE)) {
-        if (solar_os_ble_keyboard_enabled_for_current_boot()) {
-            solar_os_ble_keyboard_resume();
-            radio_resumed = true;
-        }
     }
 #endif
     if (radio_resumed) {
