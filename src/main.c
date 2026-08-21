@@ -83,6 +83,9 @@
 #include "solar_os_time.h"
 #include "solar_os_uart.h"
 #include "solar_os_wifi.h"
+#if SOLAR_OS_PACKAGE_SERVICE_WIREGUARD
+#include "solar_os_wireguard.h"
+#endif
 #include "solar_os_board.h"
 
 #ifndef SOLAR_OS_BOARD_PIN_KEY
@@ -694,6 +697,15 @@ static void enter_light_sleep(const char *reason)
     }
 #endif
 
+#if SOLAR_OS_PACKAGE_SERVICE_WIREGUARD
+    const esp_err_t wireguard_sleep_err = solar_os_wireguard_prepare_sleep();
+    if (wireguard_sleep_err != ESP_OK) {
+        SOLAR_OS_LOGW(TAG,
+                      "WireGuard sleep prepare failed: %s",
+                      esp_err_to_name(wireguard_sleep_err));
+    }
+#endif
+
 #if SOLAR_OS_PACKAGE_SERVICE_WIFI
     if (board_has(SOLAR_OS_BOARD_CAP_WIFI)) {
         const esp_err_t wifi_sleep_err = solar_os_wifi_prepare_sleep();
@@ -743,20 +755,28 @@ static void enter_light_sleep(const char *reason)
         }
     }
 #endif
-#if SOLAR_OS_PACKAGE_SERVICE_ESPNOW
-    const esp_err_t espnow_resume_err = solar_os_espnow_resume();
-    if (espnow_resume_err != ESP_OK) {
-        SOLAR_OS_LOGW(TAG,
-                      "ESP-NOW resume failed: %s",
-                      esp_err_to_name(espnow_resume_err));
-    }
-#endif
 #if SOLAR_OS_PACKAGE_SERVICE_BLE
     if (board_has(SOLAR_OS_BOARD_CAP_BLE)) {
         if (solar_os_ble_keyboard_enabled_for_current_boot()) {
             solar_os_ble_keyboard_resume();
             radio_resumed = true;
         }
+    }
+#endif
+#if SOLAR_OS_PACKAGE_SERVICE_WIREGUARD
+    const esp_err_t wireguard_resume_err = solar_os_wireguard_resume();
+    if (wireguard_resume_err != ESP_OK) {
+        SOLAR_OS_LOGW(TAG,
+                      "WireGuard resume failed: %s",
+                      esp_err_to_name(wireguard_resume_err));
+    }
+#endif
+#if SOLAR_OS_PACKAGE_SERVICE_ESPNOW
+    const esp_err_t espnow_resume_err = solar_os_espnow_resume();
+    if (espnow_resume_err != ESP_OK) {
+        SOLAR_OS_LOGW(TAG,
+                      "ESP-NOW resume failed: %s",
+                      esp_err_to_name(espnow_resume_err));
     }
 #endif
     if (radio_resumed) {
@@ -1269,6 +1289,17 @@ static void init_peripherals(void)
             SOLAR_OS_LOGI(TAG, "Wi-Fi disabled by saved boot setting");
         } else if (wifi_err != ESP_OK) {
             SOLAR_OS_LOGW(TAG, "Wi-Fi unavailable: %s", esp_err_to_name(wifi_err));
+        }
+    }
+#endif
+
+#if SOLAR_OS_PACKAGE_SERVICE_WIREGUARD
+    if (board_has(SOLAR_OS_BOARD_CAP_WIFI)) {
+        const esp_err_t wireguard_err = solar_os_wireguard_init();
+        if (wireguard_err != ESP_OK) {
+            SOLAR_OS_LOGW(TAG,
+                          "WireGuard unavailable: %s",
+                          esp_err_to_name(wireguard_err));
         }
     }
 #endif

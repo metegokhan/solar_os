@@ -96,11 +96,16 @@ audio backend while
 composite scanout owns I2S0, so Game Boy runs without MiniGB APU or synth output
 in this flavor.
 
-Network ownership is intentionally split. `network.base`, `network.mqtt`,
+Network ownership is intentionally split. `network.base`, `network.wireguard`, `network.mqtt`,
 `network.ssh`, `network.mail`, `messaging.gateway`, `network.http-client`, and
 `network.http-server` own their individual implementations. Image and document
 decoding are separate `media.image` and `media.document` packages, so selecting
 `app.curl`, for example, does not pull MQTT, SSH, mail, or image dependencies.
+
+`network.wireguard` depends directly on `service.wifi` and lwIP. It owns the
+native tunnel, its bounded route table, the lwIP route hook, persistent client
+profile, Wi-Fi address-event handling, and light-sleep lifecycle. It is not part
+of either embedded scripting runtime.
 
 `network.http-client` owns the shared TLS-enabled HTTP transport used by `curl`,
 `webradio`, and `web`. It exposes request headers and bodies, redirects,

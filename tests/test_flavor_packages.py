@@ -144,6 +144,19 @@ class FlavorPackagesTest(unittest.TestCase):
             self.catalog.package_defs["service_espnow"].depends,
             ("service_wifi",),
         )
+        self.assertIn("service_wireguard", self.catalog.group_defs["net"].members)
+        self.assertEqual(
+            self.catalog.package_defs["service_wireguard"].depends,
+            ("service_wifi",),
+        )
+        self.assertEqual(
+            self.catalog.package_defs["service_wireguard"].capabilities,
+            ("wifi",),
+        )
+        self.assertIn(
+            "wireguard_lwip",
+            self.catalog.package_defs["service_wireguard"].requires,
+        )
         self.assertEqual(
             self.catalog.package_defs["job_espnow_link"].depends,
             ("service_espnow", "service_inbox", "service_link"),
@@ -206,6 +219,7 @@ class FlavorPackagesTest(unittest.TestCase):
             self.assertTrue(pruned[package], package)
         self.assertFalse(pruned["service_audio_board"])
         self.assertFalse(pruned["service_espnow"])
+        self.assertFalse(pruned["service_wireguard"])
         self.assertFalse(pruned["job_espnow_link"])
 
     def test_webradio_survives_on_wifi_board_without_builtin_audio(self):
@@ -228,6 +242,7 @@ class FlavorPackagesTest(unittest.TestCase):
             "app_funcgen",
             "app_webradio",
             "service_espnow",
+            "service_wireguard",
             "job_espnow_link",
         ):
             self.assertTrue(pruned[package], package)

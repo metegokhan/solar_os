@@ -1238,9 +1238,11 @@ Usage:
 ssh [user@]host [port]
 ```
 
-SSH runs inline in the shell, so connection output remains in the terminal
-scrollback and disconnecting returns directly to the prompt. Remote terminal
-control sequences still work, including full-screen applications.
+On display shells, SSH owns a resumable terminal buffer. Switching to the
+SolarOS shell does not mix the local and remote scrollback, and switching back
+restores the SSH buffer. On UART and USB CDC port shells, SSH uses the shared
+port scrollback. Disconnecting returns directly to the local prompt. Remote
+terminal control sequences still work, including full-screen applications.
 
 Controls:
 

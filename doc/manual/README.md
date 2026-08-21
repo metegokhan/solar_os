@@ -101,6 +101,7 @@ This is the canonical documentation used by GitHub, the generated solar-os.eu we
 - [version command](commands.md) — Print the SolarOS version and firmware flavor.
 - [watch command](commands.md) — Repeat another shell command until Esc, q, or the app-exit key is pressed.
 - [wifi command](commands.md) — Open the Wi-Fi display TUI when launched from the display shell.
+- [wireguard command](commands.md) — Import and control the native WireGuard VPN client.
 - [xfer command](commands.md) — Send or receive files over a byte-stream port.
 - [zip command](commands.md) — Create a ZIP archive. -0 stores without compression.
 
@@ -180,6 +181,7 @@ This is the canonical documentation used by GitHub, the generated solar-os.eu we
 
 - [SSH identity keys](ssh_keys.md) — Inspect, share, generate, and remove the default SSH key pair
 - [Wi-Fi, MQTT, and network APIs](network.md) — Connect, inspect, and communicate over installed network services
+- [WireGuard VPN client](network.md#wireguard) — Import an IPv4 client profile, select leak behavior, and inspect tunnel state
 
 ## Hardware and expansion
 

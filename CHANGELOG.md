@@ -2,6 +2,23 @@
 
 ## 4.x
 
+- **4.8.7** — 2026-08-21 — Added a native ESP-IDF/lwIP WireGuard IPv4 client
+  with `wireguard import`, `up`, `down`, `status`, and `forget` commands. It
+  supports one peer, up to eight allowed-IP prefixes, split and full-tunnel
+  routing, optional tunnel DNS, Wi-Fi address-change reconnection, and
+  light-sleep recovery. Full tunnels default to fail-closed leak protection;
+  split tunnels default to fail-open, and either policy can be selected
+  explicitly. Profiles are validated without printing key material, temporary
+  secrets are wiped, handshake timestamps remain replay-safe without
+  synchronized wall time, and the encrypted endpoint remains bound to Wi-Fi.
+  The WireGuard worker is now created only while the tunnel is requested,
+  uses the PSRAM-aware task policy where safe, and releases its task memory and
+  active in-memory profile on `wireguard down`. BLE keyboard resume completes
+  before WireGuard restarts after light sleep. SSH display sessions again keep
+  independent local and remote text buffers; switching sessions restores the
+  correct scrollback, and closing SSH returns directly to the SolarOS prompt
+  without requiring an extra Enter. UART and USB CDC SSH sessions retain shared
+  port scrollback.
 - **4.8.6** — 2026-08-20 — Corrected italic and bold-italic font generation so
   glyph overhangs no longer lose their top-right corners at any supported text
   size. `Ctrl+V` now pastes the shared SolarOS clipboard into shell input without

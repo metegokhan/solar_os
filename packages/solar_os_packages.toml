@@ -116,6 +116,7 @@ triggers = [
 capabilities = ["wifi"]
 members = [
   "service_wifi",
+  "service_wireguard",
   "service_espnow",
   "service_net",
   "service_mqtt",
@@ -365,11 +366,22 @@ sources = ["services/solar_os_zip.c"]
 [packages.service_wifi]
 label = "service.wifi"
 sources = [
+  "services/solar_os_lwip_route.c",
   "services/solar_os_wifi.c",
   "shell/solar_os_shell_network.c",
   "shell/solar_os_shell_wifi_tui.c",
 ]
 requires = ["esp_event", "esp_netif", "esp_wifi", "lwip", "nvs_flash"]
+capabilities = ["wifi"]
+
+[packages.service_wireguard]
+label = "network.wireguard"
+depends = ["service_wifi"]
+sources = [
+  "services/solar_os_wireguard.c",
+  "shell/solar_os_shell_wireguard.c",
+]
+requires = ["esp_event", "esp_netif", "esp_system", "esp_wifi", "lwip", "nvs_flash", "wireguard_lwip"]
 capabilities = ["wifi"]
 
 [packages.service_espnow]
