@@ -528,6 +528,11 @@ xfer recv <port> <file> --zmodem [--append|--replace]
 | `wifi ap` | `wifi ap on [ssid [password [open|wpa|wpa2|wpa/wpa2]]]` | Start and save SoftAP settings. |
 | `wifi ap` | `wifi ap off` | Stop SoftAP. |
 | `wifi nat` | `wifi nat [status|on|off]` | Configure IPv4 NAT for APSTA. |
+| `wireguard` | `wireguard [status]` | Show profile, tunnel, route, peer, DNS, and kill-switch state without printing key material. |
+| `wireguard` | `wireguard import <file>` | Validate one standard WireGuard client profile and save it in NVS. The source file is not removed. |
+| `wireguard` | `wireguard forget` | Logically remove the saved profile from NVS. Bring the tunnel down first. |
+| `wireguard` | `wireguard up [fail-open\|fail-closed]` | Request the tunnel and reconnect it after Wi-Fi address changes. The default is fail-closed for a full tunnel and fail-open for a split tunnel. |
+| `wireguard` | `wireguard down` | Stop the tunnel, remove its routes, restore DNS, and disable its kill switch. |
 | `ble` | `ble [status]` | Show BLE keyboard state and the current/next boot setting. |
 | `ble` | `ble enable` | Save BLE enabled for the next boot. The current boot is unchanged. |
 | `ble` | `ble disable` | Save BLE disabled for the next boot. The current boot is unchanged. |
@@ -544,6 +549,13 @@ Wi-Fi is enabled by default when no saved setting exists, including after `nvs
 clear`. `wifi on` and `wifi off` control the radio in the current boot. The
 `wifi enable` and `wifi disable` settings take effect only after a reboot.
 Disabling Wi-Fi does not erase saved station, access-point, or NAT settings.
+
+WireGuard accepts one IPv4 interface address, one peer, one optional numeric
+IPv4 DNS server, and at most eight IPv4 `AllowedIPs` prefixes. IPv6 addresses,
+multiple peers, interface hooks, and configuration keys outside the documented
+client subset are rejected. Use `wireguard down` before importing a replacement
+profile or using `wireguard forget`. See [WireGuard VPN client](network.md#wireguard)
+for routing, secret, and disconnect behavior.
 
 BLE is enabled by default when no saved setting exists, including after `nvs
 clear`. The `ble enable` and `ble disable` settings take effect only after a

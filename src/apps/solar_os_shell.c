@@ -430,6 +430,9 @@ static const shell_command_t shell_builtin_commands[] = {
 #if SOLAR_OS_PACKAGE_SERVICE_WIFI
     {"wifi", "Wi-Fi station control", solar_os_shell_cmd_wifi},
 #endif
+#if SOLAR_OS_PACKAGE_SERVICE_WIREGUARD
+    {"wireguard", "WireGuard VPN client", solar_os_shell_cmd_wireguard},
+#endif
 #if SOLAR_OS_PACKAGE_SERVICE_ESPNOW
     {"espnow", "ESP-NOW transport and peers", solar_os_shell_cmd_espnow},
 #endif
@@ -626,6 +629,21 @@ static const char * const wifi_subcommands[] = {
     "forget",
     "nat",
 };
+
+#if SOLAR_OS_PACKAGE_SERVICE_WIREGUARD
+static const char * const wireguard_subcommands[] = {
+    "status",
+    "import",
+    "forget",
+    "up",
+    "down",
+};
+
+static const char * const wireguard_policy_values[] = {
+    "fail-open",
+    "fail-closed",
+};
+#endif
 
 static const char * const wifi_ap_subcommands[] = {"status", "on", "off"};
 static const char * const wifi_nat_subcommands[] = {"status", "on", "off"};
@@ -1758,6 +1776,10 @@ static const char * const path_wifi_ap_on_auth[] = {
 static const char * const path_wifi_connect[] = {"wifi", "connect"};
 static const char * const path_wifi_nat[] = {"wifi", "nat"};
 static const char * const path_wifi_forget[] = {"wifi", "forget"};
+#if SOLAR_OS_PACKAGE_SERVICE_WIREGUARD
+static const char * const path_wireguard[] = {"wireguard"};
+static const char * const path_wireguard_up[] = {"wireguard", "up"};
+#endif
 #if SOLAR_OS_PACKAGE_SERVICE_MQTT
 static const char * const path_mqtt[] = {"mqtt"};
 #endif
@@ -2675,6 +2697,10 @@ static const shell_completion_rule_t shell_completion_rules[] = {
     SHELL_COMPLETION_STATIC(path_wifi_nat, wifi_nat_subcommands),
     SHELL_COMPLETION_STATIC(path_wifi_forget, wifi_forget_values),
     SHELL_COMPLETION_WIFI_SSIDS(path_wifi_forget),
+#if SOLAR_OS_PACKAGE_SERVICE_WIREGUARD
+    SHELL_COMPLETION_STATIC(path_wireguard, wireguard_subcommands),
+    SHELL_COMPLETION_STATIC(path_wireguard_up, wireguard_policy_values),
+#endif
 #if SOLAR_OS_PACKAGE_SERVICE_NET
     SHELL_COMPLETION_STATIC(path_ping_count, ping_count_values),
     SHELL_COMPLETION_STATIC(path_netscan_ports, netscan_port_values),
